@@ -232,6 +232,46 @@ internal sealed partial class WorldScreenViewModel :
         SelectStackAt(position);
     }
 
+    /// <summary>
+    /// Shows the path to a tapped destination without moving, for touch screens where there is no hover.
+    /// Returns false when the tap should act as a click: on anything that is not a move, or on the destination
+    /// whose path is already shown.
+    /// </summary>
+    public bool TryPreviewMove(WorldPosition tile, WorldPosition? objectPosition)
+    {
+        if (!WorldState.Map.IsValidPosition(tile) || IsBusy || cursor.Action is not null)
+        {
+            return false;
+        }
+
+        WorldStack? selected = ResolveSelectedStack();
+        WorldPosition pointerTile = ResolvePointerTile(tile, objectPosition);
+        WorldPosition? target = ResolveHoverTarget(pointerTile);
+
+        if (selected is null ||
+            target is null ||
+            target.Value == selected.Position ||
+            !cursor.ReachablePositions.Contains(target.Value) ||
+            IsOwnStackAt(target.Value) ||
+            cursor.HoverPath?.Destination == target.Value)
+        {
+            return false;
+        }
+
+        UpdateHover(tile, objectPosition);
+
+        return cursor.HoverPath?.Destination == target.Value;
+    }
+
+    private bool IsOwnStackAt(WorldPosition position)
+    {
+        WorldPlan plan = WorldPlan.For(WorldState);
+        WorldVisibility visibility = WorldVisibility.Create(WorldState, ViewPlayerId, FogEnabled);
+        WorldStack? stack = visibility.GetStackAt(plan, position, ViewPlayerId);
+
+        return stack is not null && stack.OwnerId == ViewPlayerId;
+    }
+
     private bool TryHandleInspectAction(WorldPosition tile, WorldPosition? objectPosition, int clickCount)
     {
         WorldStack? selected = ResolveSelectedStack();

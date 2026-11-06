@@ -51,8 +51,6 @@ internal sealed partial class WorldVisual
             touchPinched = false;
             touchInfoShown = false;
             panAnchor = camera.ScreenToWorld(position);
-
-            UpdateHoverAt(position);
         }
         else if (touches.Count == 2)
         {
@@ -195,15 +193,16 @@ internal sealed partial class WorldVisual
 
         Point worldPoint = camera.ScreenToWorld(position);
         WorldPosition? hitPosition = HitTestWorld(worldPoint);
+        WorldPosition tile = WorldTransform.FromWorldPoint(worldPoint);
 
-        ViewModel.HandleMapClickAsync(WorldTransform.FromWorldPoint(worldPoint), hitPosition, clickCount).FileAndForget();
-    }
+        // Without hover, the first tap on a destination shows the path and a second tap on it moves there.
+        if (clickCount == 1 && ViewModel.TryPreviewMove(tile, hitPosition))
+        {
+            redrawRequested = true;
+            return;
+        }
 
-    private void UpdateHoverAt(Point position)
-    {
-        Point worldPoint = camera.ScreenToWorld(position);
-
-        ViewModel.UpdateHover(WorldTransform.FromWorldPoint(worldPoint), HitTestWorld(worldPoint));
+        ViewModel.HandleMapClickAsync(tile, hitPosition, clickCount).FileAndForget();
     }
 
     private WorldPosition? HitTestWorld(Point worldPoint)

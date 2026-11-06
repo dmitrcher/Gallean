@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.VisualTree;
 using SkiaSharp;
@@ -28,6 +29,9 @@ internal sealed class DragDropBehavior(Control view)
     private IDragSource? pressSource;
     private Point pressPosition;
     private double pressScale = 1;
+    private PointerType pressPointerType;
+    private ContentControl? touchImage;
+    private OverlayLayer? touchLayer;
 
     public static void Attach(Control view)
     {
@@ -158,6 +162,7 @@ internal sealed class DragDropBehavior(Control view)
 
             if (source?.DragPreview is not null)
             {
+                pressPointerType = e.Pointer.Type;
                 pressElement = element;
                 pressSource = source;
                 pressPosition = position;
@@ -174,6 +179,7 @@ internal sealed class DragDropBehavior(Control view)
         if (dragDrop is not null)
         {
             UpdateHoverZone(point);
+            MoveTouchImage(point);
             e.Handled = true;
         }
         else if (pressElement is not null && pressSource is not null && delta.Length >= DragThreshold)
@@ -188,6 +194,7 @@ internal sealed class DragDropBehavior(Control view)
             {
                 e.Pointer.Capture(view);
                 UpdateHoverZone(point);
+                MoveTouchImage(point);
                 e.Handled = true;
             }
         }
@@ -257,9 +264,19 @@ internal sealed class DragDropBehavior(Control view)
             double renderScaling = UiScaleDecorator.GetRenderScaling(view);
 
             dragDrop = host.DragDrop;
-            dragImage = RenderDragImage(preview, element, pressScale, renderScaling);
-            dragImageTopLevel = topLevel;
-            CursorScope.SetDragImage(topLevel, dragImage);
+
+            if (pressPointerType == PointerType.Touch)
+            {
+                // A finger has no cursor to carry the image, so it follows the finger in the overlay layer instead.
+                ShowTouchImage(preview);
+            }
+            else
+            {
+                dragImage = RenderDragImage(preview, element, pressScale, renderScaling);
+                dragImageTopLevel = topLevel;
+                CursorScope.SetDragImage(topLevel, dragImage);
+            }
+
             dragDrop.BeginDrag(GetDragReference(source, modifiers));
 
             return true;
@@ -284,8 +301,68 @@ internal sealed class DragDropBehavior(Control view)
         hoverZone = zone;
     }
 
+    private void ShowTouchImage(DragPreview preview)
+    {
+        OverlayLayer? layer = OverlayLayer.GetOverlayLayer(view);
+
+        if (layer is null)
+        {
+            return;
+        }
+
+        Size size = GetImageSize(preview.Type);
+        double scale = pressScale * (view.TransformToVisual(layer)?.M11 ?? 1);
+
+        touchImage = new ContentControl
+        {
+            Content = preview,
+            Width = size.Width,
+            Height = size.Height,
+            IsHitTestVisible = false,
+            Opacity = 0.9,
+            RenderTransformOrigin = RelativePoint.TopLeft,
+            RenderTransform = new ScaleTransform(scale, scale)
+        };
+
+        touchImage.Classes.Add(DragImageClass);
+
+        // The overlay layer is outside the screen, so the image does not inherit the screen's assets.
+        if (AssetScope.GetOptionalAssets(view) is { } assets)
+        {
+            AssetScope.SetAssets(touchImage, assets);
+        }
+
+        touchImage.SetValue(UiScaleDecorator.RenderScalingProperty, UiScaleDecorator.GetRenderScaling(view));
+
+        touchLayer = layer;
+        layer.Children.Add(touchImage);
+    }
+
+    private void MoveTouchImage(Point point)
+    {
+        if (touchImage is null || touchLayer is null || view.TranslatePoint(point, touchLayer) is not { } position)
+        {
+            return;
+        }
+
+        double scale = touchImage.RenderTransform is ScaleTransform transform ? transform.ScaleX : 1;
+        double width = touchImage.Width * scale;
+        double height = touchImage.Height * scale;
+
+        // Above the finger, so the finger does not hide what is being dragged.
+        Canvas.SetLeft(touchImage, position.X - (width / 2));
+        Canvas.SetTop(touchImage, position.Y - height - (height / 4));
+    }
+
     private void EndDragImage()
     {
+        if (touchImage is not null)
+        {
+            touchLayer?.Children.Remove(touchImage);
+            touchImage = null;
+            touchLayer = null;
+        }
+
         hoverZone?.Classes.Remove(DragOverClass);
         hoverZone = null;
         dragDrop = null;

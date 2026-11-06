@@ -24,6 +24,11 @@
     <!-- The shared client is trimmed and AOT-compiled on desktop too, so Release builds trim it the same way. -->
     <PublishTrimmed Condition="'$(Configuration)' == 'Release'">true</PublishTrimmed>
     <IsPublishable>true</IsPublishable>
+    <!--
+      Resource lookups for runtime error messages need the current culture. On devices with a locale .NET cannot
+      parse, that recursion aborts the process in Debug; Release trimming already uses resource keys.
+    -->
+    <UseSystemResourceKeys>true</UseSystemResourceKeys>
   </PropertyGroup>
 
   <ItemGroup>

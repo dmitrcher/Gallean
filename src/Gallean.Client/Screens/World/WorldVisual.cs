@@ -380,6 +380,12 @@ internal sealed partial class WorldVisual : AbstractAnimatedVisual
     {
         base.OnPointerExited(e);
 
+        // A finger leaves when it is lifted, but the path it showed must stay until the next tap.
+        if (IsTouch(e))
+        {
+            return;
+        }
+
         ViewModel.ClearHover();
     }
 

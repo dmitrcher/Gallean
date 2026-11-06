@@ -1,3 +1,4 @@
+using System.Globalization;
 using Android.App;
 using Android.Runtime;
 using Avalonia;
@@ -23,6 +24,7 @@ public sealed class MainApplication : AvaloniaAndroidApplication<Avalonia.Applic
 
     protected override AppBuilder CreateAppBuilder()
     {
+        ConfigureCulture();
         ConfigurePlatform();
 
         return ClientApp
@@ -32,6 +34,41 @@ public sealed class MainApplication : AvaloniaAndroidApplication<Avalonia.Applic
             {
                 RenderingMode = [AndroidRenderingMode.Egl, AndroidRenderingMode.Software]
             });
+    }
+
+    /// <summary>
+    /// Sets the .NET culture from the Android locale, falling back to the language alone or the invariant culture.
+    /// Some devices report locale lists that .NET cannot parse (for example "ru-RUzhzh"), and reading such a culture
+    /// later fails at startup.
+    /// </summary>
+    private static void ConfigureCulture()
+    {
+        Java.Util.Locale? locale = Java.Util.Locale.Default;
+        CultureInfo culture = TryGetCulture(locale?.ToLanguageTag()) ??
+                              TryGetCulture(locale?.Language) ??
+                              CultureInfo.InvariantCulture;
+
+        CultureInfo.DefaultThreadCurrentCulture = culture;
+        CultureInfo.DefaultThreadCurrentUICulture = culture;
+        CultureInfo.CurrentCulture = culture;
+        CultureInfo.CurrentUICulture = culture;
+    }
+
+    private static CultureInfo? TryGetCulture(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return null;
+        }
+
+        try
+        {
+            return CultureInfo.GetCultureInfo(name, predefinedOnly: true);
+        }
+        catch (CultureNotFoundException)
+        {
+            return null;
+        }
     }
 
     private void ConfigurePlatform()
