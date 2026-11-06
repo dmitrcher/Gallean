@@ -538,7 +538,14 @@ internal sealed partial class GameViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void Exit()
     {
-        lifetime?.Shutdown();
+        if (lifetime is not null)
+        {
+            lifetime.Shutdown();
+        }
+        else
+        {
+            ClientPlatform.Exit?.Invoke();
+        }
     }
 
     [RelayCommand]

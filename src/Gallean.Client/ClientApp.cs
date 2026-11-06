@@ -28,7 +28,7 @@ public static class ClientApp
             .Configure(() => new App(log))
             .With(new SkiaOptions
             {
-                MaxGpuResourceSizeBytes = MaxGpuResourceSizeBytes
+                MaxGpuResourceSizeBytes = ClientPlatform.MaxGpuResourceSizeBytes ?? MaxGpuResourceSizeBytes
             });
 
         if (useDirectRendering)

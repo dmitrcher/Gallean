@@ -49,6 +49,8 @@ internal sealed partial class WorldVisual : AbstractAnimatedVisual
     {
         Focusable = false;
         ClipToBounds = true;
+
+        AddHandler(HoldingEvent, (_, e) => OnTouchHolding(e));
     }
 
     public bool IsHitboxOverlayVisible
@@ -269,6 +271,12 @@ internal sealed partial class WorldVisual : AbstractAnimatedVisual
             return;
         }
 
+        if (IsTouch(e))
+        {
+            OnTouchPressed(e);
+            return;
+        }
+
         PointerPoint point = e.GetCurrentPoint(this);
         Point worldPoint = GetWorldPoint(e);
         IReadOnlyList<WorldRenderContent.HitTarget> hitTargets = snapshotWorker.Current?.WorldContent.HitTargets ?? [];
@@ -296,6 +304,12 @@ internal sealed partial class WorldVisual : AbstractAnimatedVisual
     {
         base.OnPointerReleased(e);
 
+        if (IsTouch(e))
+        {
+            OnTouchReleased(e);
+            return;
+        }
+
         if (e.InitialPressMouseButton == MouseButton.Right)
         {
             ViewModel.HidePositionInfo();
@@ -311,6 +325,12 @@ internal sealed partial class WorldVisual : AbstractAnimatedVisual
     {
         base.OnPointerCaptureLost(e);
 
+        if (e.Pointer.Type == PointerType.Touch)
+        {
+            OnTouchCaptureLost(e);
+            return;
+        }
+
         panAnchor = null;
 
         ViewModel.HidePositionInfo();
@@ -322,6 +342,12 @@ internal sealed partial class WorldVisual : AbstractAnimatedVisual
 
         if (!ViewModel.IsActive)
         {
+            return;
+        }
+
+        if (IsTouch(e))
+        {
+            OnTouchMoved(e);
             return;
         }
 
@@ -359,6 +385,13 @@ internal sealed partial class WorldVisual : AbstractAnimatedVisual
 
     private void OnTopLevelPointerMoved(object? sender, PointerEventArgs e)
     {
+        if (IsTouch(e))
+        {
+            // Fingers near the screen edge are not a request to scroll.
+            scrollHelper.HandlePointerExited();
+            return;
+        }
+
         Point position = e.GetPosition(this);
         Rect interfaceRect = new Rect(Bounds.Size).Deflate(InterfaceScrollMargin);
 

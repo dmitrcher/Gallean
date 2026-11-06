@@ -8,7 +8,13 @@ public static class RiseOfTheElves
     private const string CampaignsDirectoryName = "Campaign";
     private const string LanguagesDirectoryName = "Languages";
 
-    public static string RootPath => Path.Combine(AppContext.BaseDirectory, RootDirectoryName);
+    public const string DirectoryName = RootDirectoryName;
+
+    /// <summary>
+    /// The folder with the game data. Platforms that cannot ship it next to the executable (such as Android)
+    /// extract it elsewhere and point here.
+    /// </summary>
+    public static string RootPath { get; set; } = Path.Combine(AppContext.BaseDirectory, RootDirectoryName);
     public static string GlobalDatabasePath => Path.Combine(RootPath, GlobalsDirectoryName);
     public static string ScenarioDatabasePath => Path.Combine(RootPath, ScenariosDirectoryName);
     public static string CampaignDatabasePath => Path.Combine(RootPath, CampaignsDirectoryName);

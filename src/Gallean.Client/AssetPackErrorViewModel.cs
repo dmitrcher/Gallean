@@ -7,7 +7,8 @@ namespace Gallean.Client;
 internal sealed partial class AssetPackErrorViewModel(
     InstalledAssetPackException exception,
     string gameDirectory,
-    IControlledApplicationLifetime lifetime)
+    IControlledApplicationLifetime? lifetime,
+    Action? restart = null)
     : ObservableObject
 {
     public string Title { get; } = FormatTitle(exception);
@@ -16,9 +17,29 @@ internal sealed partial class AssetPackErrorViewModel(
     public Uri GetPackUri { get; } = new("https://gallean.org/go/1");
 
     [RelayCommand]
+    private void Restart()
+    {
+        if (restart is not null)
+        {
+            restart();
+        }
+        else
+        {
+            Exit();
+        }
+    }
+
+    [RelayCommand]
     private void Exit()
     {
-        lifetime.Shutdown();
+        if (lifetime is not null)
+        {
+            lifetime.Shutdown();
+        }
+        else
+        {
+            ClientPlatform.Exit?.Invoke();
+        }
     }
 
     private static string FormatTitle(InstalledAssetPackException exception)

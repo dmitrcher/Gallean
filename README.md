@@ -35,7 +35,7 @@ Gallean is fully localized into eight languages, which you can switch in the mid
 
 ## System requirements
 
-- **Operating system:** Windows 10 or newer (x64), Linux (x64), macOS (64-bit Apple Silicon or Intel)
+- **Operating system:** Windows 10 or newer (x64), Linux (x64), macOS (64-bit Apple Silicon or Intel), Android 8.0 or newer (arm64, x64)
 - **Processor:** Any 64-bit dual-core
 - **Memory:** 4 GB RAM
 - **Graphics:** 1 GB, DirectX 11 or OpenGL 3.0. Integrated graphics work.
@@ -47,6 +47,7 @@ Gallean is fully localized into eight languages, which you can switch in the mid
 | Windows | `%LOCALAPPDATA%\Gallean\Saves` |
 | Linux | `~/.local/share/Gallean/Saves` |
 | macOS | `~/Library/Application Support/Gallean/Saves` |
+| Android | `Android/data/org.gallean.client/files/Saves` |
 
 ## Building
 
@@ -63,6 +64,27 @@ dotnet run --project src/Gallean.Client.Windows
 dotnet run --project src/Gallean.Client.Linux
 dotnet run --project src/Gallean.Client.MacOS
 ```
+
+### Android
+
+The Android client lives in [`src/Gallean.Client.Android`](src/Gallean.Client.Android). It is not part of `Gallean.slnx`, so desktop builds do not need the Android workload. You will need the .NET Android workload and the Android SDK:
+
+```bash
+dotnet workload install android
+dotnet publish src/Gallean.Client.Android -c Release -p:AndroidSdkDirectory=$ANDROID_HOME
+```
+
+The APK will be in `src/Gallean.Client.Android/bin/Release/net10.0-android/publish/`. It needs Android 8.0 or newer with OpenGL ES 3.0, and runs in landscape.
+
+The game data ships inside the APK, but the asset pack does not. On first launch, tap **Open** on the asset pack screen to pick a `.galleanpack` file and import it, or copy it over USB:
+
+```bash
+adb push assets-v1.galleanpack /sdcard/Android/data/org.gallean.client/files/Assets/
+```
+
+Saves and logs are next to it, in `Android/data/org.gallean.client/files/`.
+
+On a touch screen, tap to click, drag to scroll the map, pinch to zoom, and long-press where you would right-click to see details.
 
 ## Tests
 

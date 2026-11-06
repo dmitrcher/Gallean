@@ -9,11 +9,4 @@
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource WindowBackgroundBrush}">
 
-  <StackPanel Margin="32" Spacing="16">
-    <local:OutlinedTextBlock x:Name="TitleText" Classes="h2" Foreground="{StaticResource PrimaryTextBrush}" />
-    <TextBlock x:Name="MessageText" Classes="body" Foreground="{StaticResource SecondaryTextBrush}" TextWrapping="Wrap" />
-    <TextBlock x:Name="LogLocationText" Classes="body" Foreground="{StaticResource SecondaryTextBrush}" TextWrapping="Wrap" />
-    <Button Content="{local:Text 'Exit'}" Classes="pill" Click="OnExitClick" Width="220" HorizontalAlignment="Center" />
-  </StackPanel>
-
 </Window>

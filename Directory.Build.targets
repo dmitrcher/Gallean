@@ -1,6 +1,6 @@
 <Project>
 
-  <Target Name="CleanPublishDirectory" BeforeTargets="PrepareForPublish" Condition="'$(PublishDir)' != ''">
+  <Target Name="CleanPublishDirectory" BeforeTargets="PrepareForPublish" Condition="'$(PublishDir)' != '' And '$(TargetPlatformIdentifier)' != 'android'">
     <RemoveDir Directories="$(PublishDir)" />
   </Target>
 
