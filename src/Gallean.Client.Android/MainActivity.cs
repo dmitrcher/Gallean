@@ -48,6 +48,10 @@ public sealed class MainActivity : AvaloniaMainActivity
     {
         base.OnCreate(savedInstanceState);
 
+        // Input from Android arrives on this thread outside Avalonia's dispatcher jobs; awaits started there must
+        // come back to the UI thread.
+        Avalonia.Threading.AvaloniaSynchronizationContext.InstallIfNeeded();
+
         current = this;
 
         Window?.AddFlags(WindowManagerFlags.KeepScreenOn);

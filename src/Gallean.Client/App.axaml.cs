@@ -22,6 +22,10 @@ internal sealed class App(ILog log) : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        // Mobile platforms deliver input from their own main loop, outside Avalonia's dispatcher jobs, so without
+        // this the continuations of awaits started by input run on the thread pool and build views off the UI thread.
+        AvaloniaSynchronizationContext.InstallIfNeeded();
+
         IGameHost? host = ApplicationLifetime switch
         {
             IClassicDesktopStyleApplicationLifetime desktop => new DesktopGameHost(desktop),

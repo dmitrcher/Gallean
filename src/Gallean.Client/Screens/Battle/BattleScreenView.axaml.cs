@@ -172,7 +172,8 @@ internal sealed partial class BattleScreenView : UserControl
         }
     }
 
-    private static void PlaceItemDetails(CustomPopupPlacement placement)
+    // Instance method on purpose; see BuildingTabView.PlaceDetails.
+    private void PlaceItemDetails(CustomPopupPlacement placement)
     {
         double gap = ItemDetailsGap * UiScaleDecorator.GetScalingFactor(placement.Target);
 
@@ -182,7 +183,8 @@ internal sealed partial class BattleScreenView : UserControl
         placement.Offset = new Point(0, -ItemDetailsGap * UiScaleDecorator.GetScalingFactor(placement.Target));
     }
 
-    private static void PlaceUnitDetails(CustomPopupPlacement placement)
+    // Instance method on purpose; see BuildingTabView.PlaceDetails.
+    private void PlaceUnitDetails(CustomPopupPlacement placement)
     {
         placement.ConstraintAdjustment = PopupPositionerConstraintAdjustment.SlideY;
 
