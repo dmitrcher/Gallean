@@ -18,6 +18,8 @@ internal sealed class LootScreenViewModel : AbstractScreenViewModel
     public ResourceSetViewModel? Resources { get; }
     public ImmutableArray<LootItem> Items { get; }
 
+    public override bool CanContinue => true;
+
     public static LootScreenViewModel CreateForRuin(GameModel gameModel, WorldResourceSet resources, WorldItem? item)
     {
         ImmutableArray<WorldItem> items = [];
@@ -79,6 +81,15 @@ internal sealed class LootScreenViewModel : AbstractScreenViewModel
         }
 
         return new LootScreenViewModel(Tr("New spells"), text, null, [.. spells.Select(spellId => CreateSpell(gameModel, spellId))]);
+    }
+
+    public static LootScreenViewModel CreateForCapturedResources(WorldResourceSet resources)
+    {
+        return new LootScreenViewModel(
+            Tr("Treasure"),
+            Tr("You have captured resources."),
+            new ResourceSetViewModel(resources, ResourceSetProjection.All),
+            []);
     }
 
     protected override bool TryClose()

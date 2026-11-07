@@ -21,7 +21,7 @@ internal sealed class WorldAiTargetPriorityVisitor
 
     public int Visit(WorldAiTarget.Location target, Context context)
     {
-        throw new InvalidOperationException("Invalid world AI target type.");
+        return 0;
     }
 
     public int Visit(WorldAiTarget.Bag target, Context context)
@@ -29,5 +29,12 @@ internal sealed class WorldAiTargetPriorityVisitor
         WorldBag bag = context.State.Bags[target.BagId];
 
         return bag.AiPriority;
+    }
+
+    public int Visit(WorldAiTarget.Site target, Context context)
+    {
+        WorldSite site = context.State.Sites[target.SiteId];
+
+        return site.AiPriority;
     }
 }

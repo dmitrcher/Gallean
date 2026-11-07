@@ -154,6 +154,11 @@ internal sealed partial class WorldScreenViewModel
             return LootScreenViewModel.CreateForSpells(parent.GameModel, action.Spells);
         }
 
+        AbstractScreenViewModel IWorldEventScreenVisitor<AbstractScreenViewModel>.Visit(WorldEventAction.ResourcesCapture action)
+        {
+            return LootScreenViewModel.CreateForCapturedResources(action.Resources);
+        }
+
         AbstractScreenViewModel IWorldEventScreenVisitor<AbstractScreenViewModel>.Visit(WorldEventAction.LeaderUpgrade action)
         {
             return new LeaderUpgradeViewModel(parent.GameModel, parent.Game, action.StackId);
@@ -169,9 +174,14 @@ internal sealed partial class WorldScreenViewModel
             return new ThiefActionScreenViewModel(parent.GameModel, parent.Game, action.StackId, action.TargetPosition);
         }
 
-        AbstractScreenViewModel IWorldEventScreenVisitor<AbstractScreenViewModel>.Visit(WorldEventAction.ThiefActionResult action)
+        AbstractScreenViewModel IWorldEventScreenVisitor<AbstractScreenViewModel>.Visit(WorldEventAction.ThiefActionMineResult action)
         {
-            return new ThiefActionResultScreenViewModel(action.Type, action.IsSuccess);
+            return ThiefActionResultScreenViewModel.CreateMineResult(action.Type, action.IsSuccess);
+        }
+
+        AbstractScreenViewModel IWorldEventScreenVisitor<AbstractScreenViewModel>.Visit(WorldEventAction.ThiefActionTheirResult action)
+        {
+            return ThiefActionResultScreenViewModel.CreateTheirResult(action.Type, action.Target, action.IsSuccess, action.TheirLordName);
         }
 
         AbstractScreenViewModel IWorldEventScreenVisitor<AbstractScreenViewModel>.Visit(WorldEventAction.SiteEnter action)

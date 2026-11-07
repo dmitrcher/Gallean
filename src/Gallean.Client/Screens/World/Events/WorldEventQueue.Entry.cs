@@ -87,6 +87,23 @@ internal sealed partial class WorldEventQueue
                 }
             }
 
+            public override Entry? TryExtend(Entry next)
+            {
+                if (next is StackMove move && move.StackId == StackId && move.Steps[0].Position == Steps[^1].Position)
+                {
+                    List<Step> steps = [.. Steps];
+
+                    steps[^1] = new Step(steps[^1].Position, move.Steps[0].Direction);
+                    steps.AddRange(move.Steps.Skip(1));
+
+                    return this with { State = move.State, Steps = steps };
+                }
+                else
+                {
+                    return null;
+                }
+            }
+
             public override WorldAnimationState CreateAnimation(IGameDefinitionProvider definitions, WorldVisibility visibility, GameSettings settings)
             {
                 TimeSpan stepDuration = DefaultStepDuration / settings.MovementSpeedFactor;
@@ -227,6 +244,23 @@ internal sealed partial class WorldEventQueue
             public override WorldEventFocus GetFocus()
             {
                 return new WorldEventFocus(Center, null);
+            }
+        }
+
+        public sealed record TerrainExpansion(
+            WorldState State,
+            WorldMap OldMap,
+            WorldPosition Position,
+            WorldPlayerId? PlayerId) : Animated(State)
+        {
+            public override WorldAnimationState CreateAnimation(IGameDefinitionProvider definitions, WorldVisibility visibility, GameSettings settings)
+            {
+                return new WorldAnimationState.TerrainExpansion(OldMap);
+            }
+
+            public override WorldEventFocus GetFocus()
+            {
+                return new WorldEventFocus(Position, PlayerId);
             }
         }
 
@@ -379,6 +413,8 @@ internal sealed partial class WorldEventQueue
             WorldState State,
             WorldPosition Position,
             WorldPlayerId PlayerId,
+            WorldPlayerId? TargetPlayerId,
+            WorldUnitGroup? Target,
             WorldThiefActionType Type,
             bool IsSuccess) : Animated(State)
         {
@@ -551,6 +587,17 @@ internal sealed partial class WorldEventQueue
             }
         }
 
+        public sealed record ResourcesCapture(
+            WorldState State,
+            WorldPlayerId PlayerId,
+            WorldResourceSet Resources) : Entry(State)
+        {
+            public override WorldEventFocus? GetFocus()
+            {
+                return null;
+            }
+        }
+
         public sealed record LeaderUpgrade(WorldState State, WorldStackId StackId) : Entry(State)
         {
             public override WorldEventFocus? GetFocus()
@@ -620,6 +667,11 @@ internal sealed partial class WorldEventQueue
         }
 
         public virtual Entry? TryExtend(EngineStep<WorldState, WorldEvent> step)
+        {
+            return null;
+        }
+
+        public virtual Entry? TryExtend(Entry next)
         {
             return null;
         }

@@ -105,7 +105,6 @@ public sealed partial class GameSession
         public Empty Visit(WorldUnitHealedEvent ev, Empty context) => Empty.Value;
         public Empty Visit(WorldUnitTypeLockedEvent ev, Empty context) => Empty.Value;
         public Empty Visit(WorldUnitResurrectedEvent ev, Empty context) => Empty.Value;
-        public Empty Visit(WorldUnitUpgradedEvent ev, Empty context) => Empty.Value;
         public Empty Visit(WorldLeaderUpgradeGrantedEvent ev, Empty context) => Empty.Value;
         public Empty Visit(WorldLeaderUpgradeSelectedEvent ev, Empty context) => Empty.Value;
         public Empty Visit(WorldLeaderUpgradePostponedEvent ev, Empty context) => Empty.Value;
@@ -146,9 +145,10 @@ public sealed partial class GameSession
         public Empty Visit(WorldSpellStolenEvent ev, Empty context) => Empty.Value;
         public Empty Visit(WorldSpyAddedEvent ev, Empty context) => Empty.Value;
         public Empty Visit(WorldSpyRemovedEvent ev, Empty context) => Empty.Value;
+        public Empty Visit(WorldResourcesCapturedEvent ev, Empty context) => Empty.Value;
+        public Empty Visit(WorldResourcesGivenEvent ev, Empty context) => Empty.Value;
         public Empty Visit(WorldResourcesStolenEvent ev, Empty context) => Empty.Value;
         public Empty Visit(WorldGameResumedEvent ev, Empty context) => Empty.Value;
-        public Empty Visit(WorldGoldGivenEvent ev, Empty context) => Empty.Value;
         public Empty Visit(WorldDiplomacyProposalSentEvent ev, Empty context) => Empty.Value;
         public Empty Visit(WorldDiplomacyProposalAnsweredEvent ev, Empty context) => Empty.Value;
         public Empty Visit(WorldDiplomacyItemTradedEvent ev, Empty context) => Empty.Value;

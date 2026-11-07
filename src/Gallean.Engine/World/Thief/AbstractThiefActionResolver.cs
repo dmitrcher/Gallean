@@ -25,14 +25,16 @@ internal abstract partial class AbstractThiefActionResolver(WorldPosition target
             return WorldCommandResult.Fail(error);
         }
 
-        LordDefinition lord = context.Definitions.GetLord(state.Players[player].LordId);
+        WorldPlayer thiefPlayer = state.Players[player];
+        LordDefinition lord = context.Definitions.GetLord(thiefPlayer.LordId);
 
-        if (!ThiefCalculator.IsActionAllowed(attempt.Type, lord))
+        if (!ThiefCalculator.IsActionAllowed(attempt.Type, thiefPlayer, lord))
         {
             return WorldCommandResult.Fail(WorldCommandError.ThiefActionNotAllowed);
         }
 
         WorldThiefActionDefinition definition = context.Definitions.GetThiefAction(attempt.Type);
+        WorldUnitGroup? targetGroup = ThiefCalculator.GetUnitGroup(target);
         WorldStack? targetStack = target is ThiefStackTarget stackTarget ? stackTarget.Stack : null;
         bool succeeded;
         WorldStack? destroyer;
@@ -57,7 +59,7 @@ internal abstract partial class AbstractThiefActionResolver(WorldPosition target
             return WorldCommandResult.Success(
                 Empty.Value,
                 [
-                    new WorldThiefActionSucceededEvent(thief.Id, attempt.Type, attempt.TargetPlayerId),
+                    new WorldThiefActionSucceededEvent(thief.Id, attempt.Type, attempt.TargetPlayerId, targetGroup),
                     .. attempt.Events,
                     new WorldStackMovementConsumedEvent(thief.Id, movementPoints)
                 ]);
@@ -69,7 +71,7 @@ internal abstract partial class AbstractThiefActionResolver(WorldPosition target
             return WorldCommandResult.Success(
                 Empty.Value,
                 [
-                    new WorldThiefActionFailedEvent(thief.Id, attempt.Type, attempt.TargetPlayerId),
+                    new WorldThiefActionFailedEvent(thief.Id, attempt.Type, attempt.TargetPlayerId, targetGroup),
                     new WorldStackDestroyedEvent(thief.Id, destroyerGroup, destroyer?.OwnerId)
                 ]);
         }

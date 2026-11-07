@@ -181,7 +181,10 @@ internal sealed partial class WorldEventQueue
     {
         if (step.NewState.Fortifications.TryGetValue(ev.FortificationId, out WorldFortification? fortification))
         {
-            queue.Add(new Entry.Pause(step.NewState, fortification.Entrance, ev.NewOwnerId, PauseDurationDefault));
+            if (!TryAddTerrainExpansion(step, fortification.Entrance, ev.NewOwnerId))
+            {
+                queue.Add(new Entry.Pause(step.NewState, fortification.Entrance, ev.NewOwnerId, PauseDurationDefault));
+            }
         }
 
         return Empty.Value;
@@ -270,12 +273,18 @@ internal sealed partial class WorldEventQueue
 
     Empty IWorldEventVisitor<EngineStep<WorldState, WorldEvent>, Empty>.Visit(WorldTurnStartingEvent ev, EngineStep<WorldState, WorldEvent> step)
     {
-        if (step.NewState.Players[ev.PlayerId].IsAi)
+        if (!step.NewState.Players[ev.PlayerId].IsAi)
         {
-            return Empty.Value;
+            AddHotseatTurn(step.NewState, ev.PlayerId);
         }
 
-        AddHotseatTurn(step.NewState, ev.PlayerId);
+        WorldPlan plan = WorldPlan.For(step.NewState);
+        WorldCapital? capital = plan.GetCapital(ev.PlayerId);
+
+        if (capital is not null)
+        {
+            TryAddTerrainExpansion(step, capital.Entrance, ev.PlayerId);
+        }
 
         return Empty.Value;
     }
@@ -348,11 +357,6 @@ internal sealed partial class WorldEventQueue
     }
 
     Empty IWorldEventVisitor<EngineStep<WorldState, WorldEvent>, Empty>.Visit(WorldUnitExperienceGainedEvent ev, EngineStep<WorldState, WorldEvent> step)
-    {
-        return Empty.Value;
-    }
-
-    Empty IWorldEventVisitor<EngineStep<WorldState, WorldEvent>, Empty>.Visit(WorldUnitUpgradedEvent ev, EngineStep<WorldState, WorldEvent> step)
     {
         return Empty.Value;
     }
@@ -484,6 +488,16 @@ internal sealed partial class WorldEventQueue
 
     Empty IWorldEventVisitor<EngineStep<WorldState, WorldEvent>, Empty>.Visit(WorldScenarioEventTriggeringEvent ev, EngineStep<WorldState, WorldEvent> step)
     {
+        ScenarioEventDefinition definition = scenario.GetEvent(ev.EventId);
+        ScenarioEventChangeTerrainEffect? effect = definition.Effects.OfType<ScenarioEventChangeTerrainEffect>().FirstOrDefault();
+
+        if (effect is not null)
+        {
+            ScenarioLocationDefinition location = scenario.GetLocation(effect.Location);
+
+            TryAddTerrainExpansion(step, location.Position, playerId: null);
+        }
+
         return Empty.Value;
     }
 
@@ -624,12 +638,19 @@ internal sealed partial class WorldEventQueue
         return Empty.Value;
     }
 
-    Empty IWorldEventVisitor<EngineStep<WorldState, WorldEvent>, Empty>.Visit(WorldResourcesStolenEvent ev, EngineStep<WorldState, WorldEvent> step)
+    Empty IWorldEventVisitor<EngineStep<WorldState, WorldEvent>, Empty>.Visit(WorldResourcesCapturedEvent ev, EngineStep<WorldState, WorldEvent> step)
+    {
+        queue.Add(new Entry.ResourcesCapture(step.NewState, ev.PlayerId, ev.Resources));
+
+        return Empty.Value;
+    }
+
+    Empty IWorldEventVisitor<EngineStep<WorldState, WorldEvent>, Empty>.Visit(WorldResourcesGivenEvent ev, EngineStep<WorldState, WorldEvent> step)
     {
         return Empty.Value;
     }
 
-    Empty IWorldEventVisitor<EngineStep<WorldState, WorldEvent>, Empty>.Visit(WorldGoldGivenEvent ev, EngineStep<WorldState, WorldEvent> step)
+    Empty IWorldEventVisitor<EngineStep<WorldState, WorldEvent>, Empty>.Visit(WorldResourcesStolenEvent ev, EngineStep<WorldState, WorldEvent> step)
     {
         return Empty.Value;
     }
@@ -688,7 +709,7 @@ internal sealed partial class WorldEventQueue
     {
         if (step.NewState.Stacks.TryGetValue(ev.ThiefStackId, out WorldStack? thief))
         {
-            queue.Add(new Entry.ThiefActionResult(step.NewState, thief.Position, thief.OwnerId, ev.Action, IsSuccess: true));
+            queue.Add(new Entry.ThiefActionResult(step.NewState, thief.Position, thief.OwnerId, ev.TargetPlayerId, ev.Target, ev.Action, true));
         }
 
         return Empty.Value;
@@ -698,7 +719,7 @@ internal sealed partial class WorldEventQueue
     {
         if (step.NewState.Stacks.TryGetValue(ev.ThiefStackId, out WorldStack? thief))
         {
-            queue.Add(new Entry.ThiefActionResult(step.NewState, thief.Position, thief.OwnerId, ev.Action, IsSuccess: false));
+            queue.Add(new Entry.ThiefActionResult(step.NewState, thief.Position, thief.OwnerId, ev.TargetPlayerId, ev.Target, ev.Action, false));
         }
 
         return Empty.Value;
@@ -706,7 +727,10 @@ internal sealed partial class WorldEventQueue
 
     Empty IWorldEventVisitor<EngineStep<WorldState, WorldEvent>, Empty>.Visit(WorldRodCreatedEvent ev, EngineStep<WorldState, WorldEvent> step)
     {
-        queue.Add(new Entry.Pause(step.NewState, ev.Position, ev.PlayerId, PauseDurationDefault));
+        if (!TryAddTerrainExpansion(step, ev.Position, ev.PlayerId))
+        {
+            queue.Add(new Entry.Pause(step.NewState, ev.Position, ev.PlayerId, PauseDurationDefault));
+        }
 
         return Empty.Value;
     }
@@ -785,6 +809,20 @@ internal sealed partial class WorldEventQueue
         foreach (WorldDiplomacyProposal proposal in state.Players[playerId].IncomingDiplomacyProposals)
         {
             queue.Add(new Entry.DiplomacyProposal(state, proposal));
+        }
+    }
+
+    private bool TryAddTerrainExpansion(EngineStep<WorldState, WorldEvent> step, WorldPosition position, WorldPlayerId? playerId)
+    {
+        if (step.OldState.Map != step.NewState.Map)
+        {
+            queue.Add(new Entry.TerrainExpansion(step.NewState, step.OldState.Map, position, playerId));
+
+            return true;
+        }
+        else
+        {
+            return false;
         }
     }
 

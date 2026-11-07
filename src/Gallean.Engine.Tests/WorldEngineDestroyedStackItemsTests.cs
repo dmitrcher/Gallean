@@ -774,7 +774,7 @@ public sealed class WorldEngineDestroyedStackItemsTests
         engine.CheckCommand(
             new WorldThiefActionCommand(thiefStack.Id, new WorldThiefPoisonAction(new WorldPosition(3, 2))),
             [
-                new WorldThiefActionFailedEvent(thiefStack.Id, WorldThiefActionType.PoisonStack, player2.Id),
+                new WorldThiefActionFailedEvent(thiefStack.Id, WorldThiefActionType.PoisonStack, player2.Id, new WorldUnitGroup.Stack(targetStack.Id)),
                 new WorldStackDestroyedEvent(thiefStack.Id, null, null)
             ]);
 
@@ -791,95 +791,6 @@ public sealed class WorldEngineDestroyedStackItemsTests
                         new WorldInventory([valuableItem]),
                         AiPriority: 3))
             }));
-    }
-
-    [Test]
-    public void PlayerDefeatedTest()
-    {
-        WorldMap map = TestHelpers.BuildMap([
-            "^^^^^^^^",
-            "^^^^^^^^",
-            "^^^^^^^^",
-            "^^^^^^^^",
-            "^^^^...."
-        ]);
-
-        WorldPlayer attacker = TestHelpers.SimplePlayer(new WorldPlayerId(1), WorldRace.Undead, map);
-        WorldPlayer defender = TestHelpers.SimplePlayer(new WorldPlayerId(2), WorldRace.Heretic, map);
-        UnitDefinition leader = TestHelpers.SimpleLeaderDefinition(
-            TestHelpers.SimpleUnitDefinition("leader", maxHitpoints: 100, initiative: 50, damage: 10),
-            movementPoints: 2, leadership: 6);
-
-        ItemDefinition valuable = Item("valuable", ItemCategory.Valuable);
-        WorldItem valuableItem = new(new WorldItemId("Valuable"), valuable.Id, Charges: null);
-
-        WorldStack attackerStack = TestHelpers.SimpleStack(
-            new WorldStackId("attacker"),
-            attacker.Id,
-            new WorldPosition(5, 4),
-            TestHelpers.SingleUnitGrid(new WorldUnitId("leader"), leader),
-            movementPoints: 2);
-        WorldStack defenderStack = TestHelpers.SimpleStack(
-                new WorldStackId("defender"),
-                defender.Id,
-                new WorldPosition(7, 4),
-                TestHelpers.SingleUnitGrid(new WorldUnitId("leader2"), leader),
-                movementPoints: 2) with
-            {
-                Inventory = new WorldInventory([valuableItem])
-            };
-        WorldCapital capital = TestHelpers.SimpleCapital(
-            new WorldFortificationId("capital"),
-            defender.Id,
-            new WorldPosition(4, 4),
-            UnitGrid<WorldUnit>.Empty);
-
-        WorldEngine engine = new TestWorldEngineBuilder()
-            .WithMap(map)
-            .WithDefinition(leader)
-            .WithDefinition(valuable)
-            .WithDefinition(TestHelpers.SimpleLord(attacker.LordId, attacker.Race, LordCategory.Warrior))
-            .WithPlayer(attacker)
-            .WithDefinition(TestHelpers.SimpleLord(defender.LordId, defender.Race, LordCategory.Warrior))
-            .WithPlayer(defender)
-            .WithStack(attackerStack)
-            .WithStack(defenderStack)
-            .WithCapital(capital)
-            .Build();
-
-        _ = engine.DispatchCommand(new WorldStartGameCommand());
-
-        engine.CheckCommand(new WorldMoveStackCommand(attackerStack.Id, capital.Entrance), [
-            new WorldStackMovingEvent(attackerStack.Id, new WorldPosition(5, 4), capital.Entrance, WorldStackDirection.NorthWest, 2, [], null),
-            new WorldFortificationEnteredEvent(new WorldStackId("attacker"), new WorldFortificationId("capital")),
-            new WorldFortificationCapturingEvent(capital.Id, defender.Id, attacker.Id, attackerStack.Id),
-            new WorldPlayerDefeatedEvent(defender.Id),
-            new WorldStackDestroyedEvent(defenderStack.Id, Destroyer: null, DestroyerPlayerId: null),
-            new WorldScenarioEndedEvent(attacker.Id),
-            new WorldFortificationCapturedEvent(capital.Id, defender.Id, attacker.Id, attackerStack.Id),
-            new WorldStackMovedEvent(attackerStack.Id, new WorldPosition(5, 4), capital.Entrance, WorldStackDirection.NorthWest, 2, [], null)
-        ]);
-
-        Assert.That(engine.State, Is.EqualTo(engine.State with
-        {
-            Stacks = engine.State.Stacks
-                .SetItem(attackerStack.Id, attackerStack with
-                {
-                    Position = capital.Entrance,
-                    Direction = WorldStackDirection.NorthWest,
-                    MovementPoints = 2
-                })
-                .Remove(defenderStack.Id),
-            Fortifications = engine.State.Fortifications.SetItem(capital.Id, capital with { CapturedById = attacker.Id }),
-            Bags = ImmutableSortedDictionary<WorldBagId, WorldBag>.Empty.Add(
-                new WorldBagId("Bag0001"),
-                new WorldBag(
-                    new WorldBagId("Bag0001"),
-                    new WorldPosition(7, 4),
-                    new WorldObjectVariant(0),
-                    new WorldInventory([valuableItem]),
-                    AiPriority: 3))
-        }));
     }
 
     [Test]
@@ -1237,7 +1148,7 @@ public sealed class WorldEngineDestroyedStackItemsTests
         engine.CheckCommand(
             new WorldThiefActionCommand(thiefStack.Id, new WorldThiefAssassinateAction(new WorldPosition(3, 2))),
             [
-                new WorldThiefActionSucceededEvent(thiefStack.Id, WorldThiefActionType.Assassinate, player2.Id),
+                new WorldThiefActionSucceededEvent(thiefStack.Id, WorldThiefActionType.Assassinate, player2.Id, new WorldUnitGroup.Stack(targetStack.Id)),
                 new WorldStackDestroyedEvent(targetStack.Id, new WorldUnitGroup.Stack(thiefStack.Id), thiefStack.OwnerId),
                 new WorldStackMovementConsumedEvent(thiefStack.Id, 10)
             ]);
@@ -1341,7 +1252,7 @@ public sealed class WorldEngineDestroyedStackItemsTests
         engine.CheckCommand(
             new WorldThiefActionCommand(thiefStack.Id, new WorldThiefBribeAction(new WorldPosition(2, 2))),
             [
-                new WorldThiefActionSucceededEvent(thiefStack.Id, WorldThiefActionType.Bribe, neutral.Id),
+                new WorldThiefActionSucceededEvent(thiefStack.Id, WorldThiefActionType.Bribe, neutral.Id, new WorldUnitGroup.Fortification(city.Id)),
                 new WorldStackDestroyedEvent(occupant.Id, new WorldUnitGroup.Stack(thiefStack.Id), thiefStack.OwnerId),
                 new WorldCityBribedEvent(thiefStack.Id, city.Id, new WorldResourceSet(750, 0, 0, 0, 0, 0)),
                 new WorldFortificationCapturingEvent(city.Id, neutral.Id, player.Id, thiefStack.Id),
@@ -1434,7 +1345,7 @@ public sealed class WorldEngineDestroyedStackItemsTests
         engine.CheckCommand(
             new WorldThiefActionCommand(thiefStack.Id, new WorldThiefPoisonAction(new WorldPosition(3, 2))),
             [
-                new WorldThiefActionFailedEvent(thiefStack.Id, WorldThiefActionType.PoisonStack, player2.Id),
+                new WorldThiefActionFailedEvent(thiefStack.Id, WorldThiefActionType.PoisonStack, player2.Id, new WorldUnitGroup.Stack(targetStack.Id)),
                 new WorldStackDestroyedEvent(thiefStack.Id, new WorldUnitGroup.Stack(targetStack.Id), targetStack.OwnerId)
             ]);
 

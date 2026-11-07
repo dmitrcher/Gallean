@@ -27,6 +27,7 @@ internal sealed class WorldEventActionBuilder(
             Entry.StackCreate data => BuildStackCreate(data),
             Entry.StackOwnerChange data => BuildStackOwnerChange(data),
             Entry.MountainRemove data => BuildMountainRemove(data),
+            Entry.TerrainExpansion data => BuildTerrainExpansion(data),
             Entry.Unfog data => BuildUnfog(data),
             Entry.SpellCast data => BuildSpellCast(data),
             Entry.GlobalSpellCast data => BuildGlobalSpellCast(data),
@@ -44,6 +45,7 @@ internal sealed class WorldEventActionBuilder(
             Entry.BagPickUp data => BuildBagPickUp(data),
             Entry.ItemsReceive data => BuildItemsReceive(data),
             Entry.SpellsReceive data => BuildSpellsReceive(data),
+            Entry.ResourcesCapture data => BuildResourcesCapture(data),
             Entry.LeaderUpgrade data => BuildLeaderUpgrade(data),
             Entry.DiplomacyProposal data => BuildDiplomacyProposal(data),
             Entry.ThiefAction data => BuildThiefAction(data),
@@ -136,6 +138,20 @@ internal sealed class WorldEventActionBuilder(
         if (visibility.IsRevealed(mountainRemove.Center))
         {
             return Animate(mountainRemove, visibility);
+        }
+        else
+        {
+            return WorldEventAction.None;
+        }
+    }
+
+    private WorldEventAction BuildTerrainExpansion(Entry.TerrainExpansion terrainExpansion)
+    {
+        WorldVisibility visibility = WorldVisibility.Create(terrainExpansion.State, ViewPlayerId, fogEnabled);
+
+        if (visibility.IsRevealed(terrainExpansion.Position))
+        {
+            return Animate(terrainExpansion, visibility);
         }
         else
         {
@@ -471,6 +487,21 @@ internal sealed class WorldEventActionBuilder(
         }
     }
 
+    private WorldEventAction BuildResourcesCapture(Entry.ResourcesCapture resourcesCapture)
+    {
+        if (resourcesCapture.PlayerId == ViewPlayerId)
+        {
+            return new WorldEventAction.ResourcesCapture(
+                [new AssetSoundKey.BagPickUp()],
+                resourcesCapture.GetFocusPosition(ViewPlayerId),
+                resourcesCapture.Resources);
+        }
+        else
+        {
+            return WorldEventAction.None;
+        }
+    }
+
     private WorldEventAction BuildLeaderUpgrade(Entry.LeaderUpgrade upgrade)
     {
         WorldState state = snapshot.WorldState;
@@ -519,11 +550,23 @@ internal sealed class WorldEventActionBuilder(
     {
         if (result.PlayerId == ViewPlayerId)
         {
-            return new WorldEventAction.ThiefActionResult(
+            return new WorldEventAction.ThiefActionMineResult(
                 [new AssetSoundKey.ThiefAction()],
                 result.GetFocusPosition(ViewPlayerId),
                 result.Type,
                 result.IsSuccess);
+        }
+        else if (result.Target is not null && result.TargetPlayerId == ViewPlayerId)
+        {
+            WorldPlayer player = result.State.Players[result.PlayerId];
+
+            return new WorldEventAction.ThiefActionTheirResult(
+                [new AssetSoundKey.ThiefAction()],
+                result.GetFocusPosition(ViewPlayerId),
+                result.Type,
+                result.Target,
+                result.IsSuccess,
+                WorldPlayerFormatter.FormatLordName(texts, player));
         }
         else
         {

@@ -4,11 +4,10 @@ namespace Gallean.Client;
 
 internal abstract partial record WorldEventAction
 {
-    public sealed record ThiefActionResult(
+    public sealed record ResourcesCapture(
         ImmutableArray<AssetSoundKey> Sounds,
         WorldPosition? FocusPosition,
-        WorldThiefActionType Type,
-        bool IsSuccess) : Screen(Sounds, FocusPosition)
+        WorldResourceSet Resources) : Screen(Sounds, FocusPosition)
     {
         public override TResult Accept<TResult>(IWorldEventScreenVisitor<TResult> visitor)
         {

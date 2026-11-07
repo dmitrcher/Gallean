@@ -183,6 +183,7 @@ internal sealed partial class WorldRenderComposer(
                 WorldAnimationState.StackCreate data => AnimationBuilder.BuildStackCreate(assets, data.Position),
                 WorldAnimationState.StackOwnerChange data => AnimationBuilder.BuildStackOwnerChange(assets, data.Position),
                 WorldAnimationState.MountainRemove data => AnimationBuilder.BuildMountainRemove(assets, data.Center, data.Radius),
+                WorldAnimationState.TerrainExpansion data => new TerrainExpansionBuilder(data.OldMap, request.State.Map).Build(),
                 WorldAnimationState.Pause data => new Pause(data.Duration),
                 WorldAnimationState.StackBattle data => AnimationBuilder.BuildStackBattle(assets, data.Position),
                 WorldAnimationState.BattleStart data => new BattleTransition(data.Position, BattleTransitionType.In),
@@ -396,10 +397,15 @@ internal sealed partial class WorldRenderComposer(
     {
         WorldCursor cursor = request.Cursor;
 
-        if (cursor.StackId is not null &&
-            cursor.StackId != animatedStackId &&
-            cursor.Action is null &&
-            cursor.ReachablePositions.Count > 0)
+        if (cursor.Action is not null &&
+            cursor.Action.TargetPositions.Count > 0)
+        {
+            return new ReachOverlay(cursor.Action.TargetPositions);
+        }
+        else if (cursor.StackId is not null &&
+                 cursor.StackId != animatedStackId &&
+                 cursor.Action is null &&
+                 cursor.ReachablePositions.Count > 0)
         {
             WorldStack? stack = request.State.Stacks.GetValueOrDefault(cursor.StackId.Value);
 

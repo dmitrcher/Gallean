@@ -8,7 +8,8 @@
     <RootNamespace>Gallean.Client.Android</RootNamespace>
     <ApplicationId>org.gallean.client</ApplicationId>
     <ApplicationTitle>Gallean</ApplicationTitle>
-    <ApplicationVersion>1</ApplicationVersion>
+    <!-- Android version code from the game version: 0.13.0 becomes 1300, so every release installs over the last one. -->
+    <ApplicationVersion>$([MSBuild]::Add($([MSBuild]::Add($([MSBuild]::Multiply($([System.Version]::Parse($(VersionPrefix)).Major), 1000000)), $([MSBuild]::Multiply($([System.Version]::Parse($(VersionPrefix)).Minor), 100)))), $([System.Version]::Parse($(VersionPrefix)).Build)))</ApplicationVersion>
     <ApplicationDisplayVersion>$(VersionPrefix)</ApplicationDisplayVersion>
     <AndroidPackageFormat>apk</AndroidPackageFormat>
     <RuntimeIdentifiers>android-arm64;android-x64</RuntimeIdentifiers>

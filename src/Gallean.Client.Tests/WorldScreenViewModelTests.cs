@@ -1903,6 +1903,7 @@ public sealed class WorldScreenViewModelTests
         Assert.That(gameModel.Snapshot.WorldState.Stacks[stack.Id].Position, Is.EqualTo(new WorldPosition(0, 0)));
 
         await world.HandleMapClickAsync(new WorldPosition(2, 0), null, 1);
+        world.Update(TimeSpan.Zero, TimeSpan.FromMilliseconds(100));
 
         renderState = BuildWorldState(world);
 
@@ -2037,6 +2038,8 @@ public sealed class WorldScreenViewModelTests
         }));
 
         await world.HandleMapClickAsync(new WorldPosition(3, 0), null, 1);
+        world.Update(TimeSpan.Zero, TimeSpan.FromMilliseconds(100));
+        world.Update(TimeSpan.Zero, TimeSpan.FromMilliseconds(300));
 
         renderState = BuildWorldState(world);
 
@@ -3544,7 +3547,7 @@ public sealed class WorldScreenViewModelTests
 
         Assert.That(capturedCity.OwnerId, Is.EqualTo(ai.Id));
         Assert.That(world.CameraFocus, Is.EqualTo(humanCity.Entrance));
-        Assert.That(world.RenderRequest.Animation, Is.EqualTo(new WorldAnimationState.Pause(TimeSpan.FromSeconds(0.75))));
+        Assert.That(world.RenderRequest.Animation, Is.EqualTo(new WorldAnimationState.TerrainExpansion(map)));
 
         world.CompleteAnimation();
 
@@ -3978,6 +3981,7 @@ public sealed class WorldScreenViewModelTests
         }));
 
         await world.HandleMapClickAsync(new WorldPosition(5, 5), null, 1);
+        world.CompleteAnimation();
 
         Assert.That(gameModel.Snapshot.WorldState.Stacks[stack.Id].Position, Is.EqualTo(new WorldPosition(5, 5)));
     }
@@ -4120,6 +4124,7 @@ public sealed class WorldScreenViewModelTests
         }));
 
         await world.HandleMapClickAsync(new WorldPosition(3, 3), null, 1);
+        world.CompleteAnimation();
 
         Assert.That(gameModel.Snapshot.WorldState.Stacks[stack.Id].Position, Is.EqualTo(new WorldPosition(5, 5)));
     }
@@ -4189,6 +4194,7 @@ public sealed class WorldScreenViewModelTests
         }));
 
         await world.HandleMapClickAsync(new WorldPosition(4, 4), null, 1);
+        world.CompleteAnimation();
 
         Assert.That(gameModel.Snapshot.WorldState.Stacks[stack.Id].Position, Is.EqualTo(new WorldPosition(4, 4)));
     }
@@ -4258,6 +4264,7 @@ public sealed class WorldScreenViewModelTests
         }));
 
         await world.HandleMapClickAsync(new WorldPosition(2, 2), null, 1);
+        world.CompleteAnimation();
 
         Assert.That(gameModel.Snapshot.WorldState.Stacks[stack.Id].Position, Is.EqualTo(new WorldPosition(4, 4)));
     }
@@ -4541,7 +4548,7 @@ public sealed class WorldScreenViewModelTests
     [Test]
     public async Task ConsecutivePauseAnimationsTest()
     {
-        WorldMap map = TestHelpers.SimpleMap(6, 6);
+        WorldMap map = TestHelpers.SimpleMap(6, 6, 'U');
 
         UnitDefinition rodLeaderDefinition = TestHelpers.SimpleUnitDefinition("rod-leader", maxHitpoints: 100, initiative: 50, damage: 10) with
         {
@@ -4630,7 +4637,7 @@ public sealed class WorldScreenViewModelTests
     [Test]
     public async Task AnimationAcrossRefreshesTest()
     {
-        WorldMap map = TestHelpers.SimpleMap(6, 6);
+        WorldMap map = TestHelpers.SimpleMap(6, 6, 'U');
 
         UnitDefinition rodLeaderDefinition = TestHelpers.SimpleUnitDefinition("rod-leader", maxHitpoints: 100, initiative: 50, damage: 10) with
         {
@@ -5673,7 +5680,7 @@ public sealed class WorldScreenViewModelTests
         await world.HandleMapClickAsync(new WorldPosition(4, 4), null, 1);
         audioPlayer.Actions.Clear();
 
-        await world.HandleMapClickAsync(new WorldPosition(4, 4), null, 1);
+        world.CompleteAnimation();
 
         Assert.That(gameViewModel.Screens, Is.EqualTo([world]));
 
@@ -6274,7 +6281,7 @@ public sealed class WorldScreenViewModelTests
     }
 
     [Test]
-    public async Task ThiefActionResultTest()
+    public async Task ThiefActionMineResultTest()
     {
         WorldMap map = TestHelpers.SimpleMap(3, 3);
 
@@ -6338,6 +6345,7 @@ public sealed class WorldScreenViewModelTests
 
         Assert.That(result.Title, Is.EqualTo("Success!"));
         Assert.That(result.Text, Is.EqualTo("Your spy has infiltrated the enemy ranks. Right-click enemy parties and cities to reveal information about them!"));
+        Assert.That(result.IsSuccess, Is.True);
         Assert.That(result.ImageKey, Is.EqualTo(new AssetSpriteKey.ThiefActionImage(WorldThiefActionType.Spy, IsLarge: true)));
 
         gameViewModel.EscapeCommand.Execute(null);
@@ -6347,7 +6355,7 @@ public sealed class WorldScreenViewModelTests
     }
 
     [Test]
-    public async Task ThiefActionFailedResultTest()
+    public async Task ThiefActionMineFailedResultTest()
     {
         WorldMap map = TestHelpers.SimpleMap(3, 3);
 
@@ -6411,12 +6419,75 @@ public sealed class WorldScreenViewModelTests
 
         Assert.That(result.Title, Is.EqualTo("Failure!"));
         Assert.That(result.Text, Is.EqualTo("Your thief has been captured and executed!"));
+        Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.ImageKey, Is.EqualTo(new AssetSpriteKey.ThiefActionImage(WorldThiefActionType.PoisonStack, IsLarge: true)));
 
         gameViewModel.EscapeCommand.Execute(null);
 
         Assert.That(gameViewModel.TopScreen, Is.SameAs(world));
         Assert.That(world.IsActive, Is.True);
+    }
+
+    [Test]
+    public async Task ThiefActionTheirResultTest()
+    {
+        WorldMap map = TestHelpers.SimpleMap(3, 3);
+
+        WorldPlayer human = TestHelpers.SimplePlayer(new WorldPlayerId(1), WorldRace.Undead, map);
+        WorldPlayer ai = TestHelpers.SimplePlayer(new WorldPlayerId(2), WorldRace.Heretic, map) with { IsAi = true };
+
+        UnitDefinition thief = TestHelpers.SimpleThiefDefinition();
+        UnitDefinition leader = TestHelpers.SimpleLeaderDefinition(
+            TestHelpers.SimpleUnitDefinition("leader", maxHitpoints: 100, initiative: 50, damage: 10),
+            movementPoints: 6, leadership: 6);
+
+        WorldStack thiefStack = TestHelpers.SimpleStack(
+            new WorldStackId("thief"),
+            ai.Id,
+            new WorldPosition(1, 0),
+            TestHelpers.SingleUnitGrid(new WorldUnitId("thief"), thief),
+            movementPoints: 20);
+
+        WorldStack humanStack = TestHelpers.SimpleStack(
+            new WorldStackId("human"),
+            human.Id,
+            new WorldPosition(2, 0),
+            TestHelpers.SingleUnitGrid(new WorldUnitId("leader"), leader),
+            movementPoints: 6);
+
+        (GameSession session, _) = new TestWorldEngineBuilder()
+            .WithMap(map)
+            .WithTurnInfo(new WorldTurnInfo(1, ai.Id))
+            .WithRandom(new TestSequenceRandomProvider(0, 0))
+            .WithDefinition(thief)
+            .WithDefinition(leader)
+            .WithDefinition(TestHelpers.SimpleThiefActionDefinition(WorldThiefActionType.PoisonStack, 90))
+            .WithDefinition(TestHelpers.SimpleLord(human.LordId, human.Race, LordCategory.Warrior))
+            .WithPlayer(human)
+            .WithDefinition(TestHelpers.SimpleLord(ai.LordId, ai.Race, LordCategory.Warrior))
+            .WithPlayer(ai)
+            .WithStack(thiefStack)
+            .WithStack(humanStack)
+            .WithSubrace(TestHelpers.NeutralSubrace)
+            .BuildSession();
+
+        GameModel gameModel = new(session, TestGameTextProvider.Instance, NullLog.Instance, SynchronousTaskScheduler.Instance);
+        GameViewModel gameViewModel = new TestGameViewModelBuilder().Build();
+        WorldScreenViewModel world = new(gameModel, gameViewModel, new RandomProvider(0));
+        gameViewModel.ShowScreen(world);
+        world.CompleteGameStart();
+
+        await gameModel.World.DispatchCommandAsync(new WorldThiefActionCommand(thiefStack.Id, new WorldThiefPoisonAction(humanStack.Position)));
+
+        ThiefActionResultScreenViewModel result = Assert.IsOfType<ThiefActionResultScreenViewModel>(gameViewModel.TopScreen);
+
+        Assert.That(result.Title, Is.EqualTo("Thief actions"));
+        Assert.That(result.Text, Is.EqualTo("Player2 has poisoned your party."));
+        Assert.That(result.ImageKey, Is.EqualTo(new AssetSpriteKey.ThiefActionImage(WorldThiefActionType.PoisonStack, IsLarge: true)));
+
+        gameViewModel.EscapeCommand.Execute(null);
+
+        Assert.That(gameViewModel.TopScreen, Is.SameAs(world));
     }
 
     [Test]
@@ -6584,6 +6655,7 @@ public sealed class WorldScreenViewModelTests
         await world.ActivateStackActionCommand.ExecuteAsync(new WorldStackAction.CreateRod(stack.Id));
 
         Assert.That(world.ActionPromptText, Is.EqualTo("Select a tile to plant a rod on."));
+        Assert.That(world.ActionPromptCost, Is.EqualTo(new ResourceSetViewModel(new WorldResourceSet(150, 0, 0, 0, 0, 0), ResourceSetProjection.All)));
 
         await world.ActivateStackActionCommand.ExecuteAsync(new WorldStackAction.DestroyRod(stack.Id));
 
@@ -7322,6 +7394,7 @@ public sealed class WorldScreenViewModelTests
         AttackPromptViewModel reopenedPrompt = Assert.IsOfType<AttackPromptViewModel>(gameViewModel.TopScreen);
 
         await reopenedPrompt.ConfirmCommand.ExecuteAsync(null);
+        world.CompleteAnimation();
 
         Assert.That(gameViewModel.Screens, Is.EqualTo([world]));
         Assert.That(gameModel.Snapshot.WorldState.Stacks[stack.Id].Position, Is.EqualTo(new WorldPosition(2, 0)));
@@ -7485,6 +7558,7 @@ public sealed class WorldScreenViewModelTests
 
         await world.HandleMapClickAsync(new WorldPosition(0, 0), null, 1);
         await world.HandleMapClickAsync(new WorldPosition(3, 0), null, 1);
+        world.CompleteAnimation();
 
         Assert.That(gameViewModel.Screens, Is.EqualTo([world]));
         Assert.That(gameModel.Snapshot.WorldState.Stacks[stack.Id].Position, Is.EqualTo(new WorldPosition(2, 0)));
@@ -8234,5 +8308,323 @@ public sealed class WorldScreenViewModelTests
 
         ManagementScreenViewModel screen = Assert.IsOfType<ManagementScreenViewModel>(gameViewModel.TopScreen);
         Assert.IsOfType<StackTabViewModel>(screen.SelectedTab);
+    }
+
+    [Test]
+    public async Task MoveAnimationExtendTest()
+    {
+        WorldMap map = TestHelpers.SimpleMap(4, 1);
+        WorldPlayer player = TestHelpers.SimplePlayer(new WorldPlayerId(1), WorldRace.Undead, map);
+
+        UnitDefinition leader = TestHelpers.SimpleLeaderDefinition(
+            TestHelpers.SimpleUnitDefinition("Leader", maxHitpoints: 100, initiative: 50, damage: 10),
+            movementPoints: 6, leadership: 6);
+        IGameDefinitionProvider stackDefinitions = new TestGameDefinitionProviderBuilder()
+            .AddUnit(leader)
+            .Build();
+
+        WorldStack stack = TestHelpers.SimpleStack(
+            new WorldStackId("Stack1"),
+            player.Id,
+            new WorldPosition(0, 0),
+            TestHelpers.StackUnitGrid(
+                stackDefinitions,
+                [(new WorldUnit(new WorldUnitId("leader"), leader.Id, 100, 0, 1, [], null, false), GridPosition.FrontBottom)]),
+            movementPoints: 6);
+
+        (GameSession session, _) = new TestWorldEngineBuilder()
+            .WithMap(map)
+            .WithDefinition(leader)
+            .WithDefinition(TestHelpers.SimpleLord(player.LordId, player.Race, LordCategory.Warrior))
+            .WithPlayer(player)
+            .WithStack(stack)
+            .WithSubrace(TestHelpers.NeutralSubrace)
+            .BuildSession();
+
+        GameModel gameModel = new(session, TestGameTextProvider.Instance, NullLog.Instance, SynchronousTaskScheduler.Instance);
+        GameViewModel gameViewModel = new TestGameViewModelBuilder().Build();
+        WorldScreenViewModel world = new(gameModel, gameViewModel, new RandomProvider(0));
+        gameViewModel.ShowScreen(world);
+        world.CompleteGameStart();
+
+        await world.HandleMapClickAsync(new WorldPosition(0, 0), null, 1);
+        await world.HandleMapClickAsync(new WorldPosition(3, 0), null, 1);
+
+        Assert.That(world.RenderRequest.Animation, Is.EqualTo(new WorldAnimationState.StackMove(
+            stack.Id,
+            [
+                new WorldAnimationState.StackMoveStep(new WorldPosition(0, 0), WorldStackDirection.SouthEast, TimeSpan.Zero),
+                new WorldAnimationState.StackMoveStep(new WorldPosition(1, 0), WorldStackDirection.SouthEast, TimeSpan.FromMilliseconds(200))
+            ])));
+        Assert.That(gameModel.Snapshot.WorldState.Stacks[stack.Id], Is.EqualTo(stack with
+        {
+            Position = new WorldPosition(1, 0),
+            Direction = WorldStackDirection.SouthEast,
+            MovementPoints = 4
+        }));
+
+        world.Update(TimeSpan.Zero, TimeSpan.FromMilliseconds(99));
+
+        Assert.That(gameModel.Snapshot.WorldState.Stacks[stack.Id].Position, Is.EqualTo(new WorldPosition(1, 0)));
+
+        world.Update(TimeSpan.Zero, TimeSpan.FromMilliseconds(100));
+
+        Assert.That(world.RenderRequest.Animation, Is.EqualTo(new WorldAnimationState.StackMove(
+            stack.Id,
+            [
+                new WorldAnimationState.StackMoveStep(new WorldPosition(0, 0), WorldStackDirection.SouthEast, TimeSpan.Zero),
+                new WorldAnimationState.StackMoveStep(new WorldPosition(1, 0), WorldStackDirection.SouthEast, TimeSpan.FromMilliseconds(200)),
+                new WorldAnimationState.StackMoveStep(new WorldPosition(2, 0), WorldStackDirection.SouthEast, TimeSpan.FromMilliseconds(400))
+            ])));
+        Assert.That(gameModel.Snapshot.WorldState.Stacks[stack.Id], Is.EqualTo(stack with
+        {
+            Position = new WorldPosition(2, 0),
+            Direction = WorldStackDirection.SouthEast,
+            MovementPoints = 2
+        }));
+
+        await world.HandleMapClickAsync(new WorldPosition(3, 0), null, 1);
+        world.Update(TimeSpan.Zero, TimeSpan.FromMilliseconds(400));
+        world.CompleteAnimation();
+
+        Assert.That(world.RenderRequest.Animation, Is.Null);
+        Assert.That(gameModel.Snapshot.WorldState.Stacks[stack.Id], Is.EqualTo(stack with
+        {
+            Position = new WorldPosition(2, 0),
+            Direction = WorldStackDirection.SouthEast,
+            MovementPoints = 2
+        }));
+    }
+
+    [Test]
+    public async Task MoveScenarioEventTest()
+    {
+        WorldMap map = TestHelpers.SimpleMap(4, 1);
+        WorldPlayer player = TestHelpers.SimplePlayer(new WorldPlayerId(1), WorldRace.Human, map);
+        UnitDefinition leader = TestHelpers.SimpleLeaderDefinition(
+            TestHelpers.SimpleUnitDefinition("leader", maxHitpoints: 100, initiative: 50, damage: 10),
+            movementPoints: 6, leadership: 6);
+        WorldStack stack = TestHelpers.SimpleStack(
+            new WorldStackId("Stack1"),
+            player.Id,
+            new WorldPosition(0, 0),
+            TestHelpers.SingleUnitGrid(new WorldUnitId("leader"), leader),
+            movementPoints: 6);
+        ScenarioLocationDefinition zone = new(
+            new ScenarioLocationId("Zone1"),
+            new ScenarioTextId("Greeting"),
+            new WorldPosition(1, 0),
+            0);
+        ScenarioEventDefinition scenarioEvent = new(
+            Id: new ScenarioEventId("Event1"),
+            AffectedRaces: [WorldRace.Human],
+            VerifiedRaces: [WorldRace.Human],
+            Conditions: [new ScenarioEventEnteringZoneCondition(zone.Id)],
+            Effects: [new ScenarioEventPopupEffect(new ScenarioTextId("Welcome."), ScenarioEventPopupAudience.Triggerer, null, IsPortraitLeft: false, IsPortraitTriggerer: true)],
+            Enabled: true,
+            OccurOnce: true,
+            Chance: 100,
+            Order: 0);
+
+        (GameSession session, _) = new TestWorldEngineBuilder()
+            .WithMap(map)
+            .WithDefinition(leader)
+            .WithDefinition(TestHelpers.SimpleLord(player.LordId, player.Race, LordCategory.Warrior))
+            .WithPlayer(player)
+            .WithStack(stack)
+            .WithScenarioLocation(zone)
+            .WithScenarioEvent(scenarioEvent)
+            .BuildSession();
+
+        GameModel gameModel = new(session, TestGameTextProvider.Instance, NullLog.Instance, SynchronousTaskScheduler.Instance);
+        GameViewModel gameViewModel = new TestGameViewModelBuilder().Build();
+        WorldScreenViewModel world = new(gameModel, gameViewModel, new RandomProvider(0));
+        gameViewModel.ShowScreen(world);
+        world.CompleteGameStart();
+
+        await gameModel.World.DispatchCommandAsync(new WorldStartGameCommand());
+        await world.HandleMapClickAsync(new WorldPosition(0, 0), null, 1);
+        await world.HandleMapClickAsync(new WorldPosition(3, 0), null, 1);
+
+        world.CompleteAnimation();
+        world.CompleteAnimation();
+
+        ScenarioEventPopupViewModel popup = Assert.IsOfType<ScenarioEventPopupViewModel>(gameViewModel.TopScreen);
+
+        popup.CloseCommand.Execute(null);
+
+        Assert.That(gameViewModel.TopScreen, Is.SameAs(world));
+        Assert.That(world.RenderRequest.Animation, Is.Null);
+        Assert.That(world.EndTurnCommand.CanExecute(null), Is.True);
+        Assert.That(gameModel.Snapshot.WorldState.Stacks[stack.Id], Is.EqualTo(stack with
+        {
+            Position = new WorldPosition(1, 0),
+            Direction = WorldStackDirection.SouthEast,
+            MovementPoints = 4
+        }));
+    }
+
+    [Test]
+    public async Task CaptureCapitalResourcesTest()
+    {
+        WorldMap map = TestHelpers.SimpleMap(6, 5);
+        WorldPlayer player = TestHelpers.SimplePlayer(new WorldPlayerId(1), WorldRace.Undead, map);
+        WorldPlayer defender = TestHelpers.SimplePlayer(new WorldPlayerId(2), WorldRace.Heretic, map) with
+        {
+            IsAi = true,
+            Resources = new WorldResourceSet(300, 0, 0, 0, 50, 0)
+        };
+        WorldPlayer otherPlayer = TestHelpers.SimplePlayer(new WorldPlayerId(3), WorldRace.Human, map) with { IsAi = true };
+        UnitDefinition leader = TestHelpers.SimpleLeaderDefinition(
+            TestHelpers.SimpleUnitDefinition("leader", maxHitpoints: 100, initiative: 50, damage: 10),
+            movementPoints: 2, leadership: 6);
+        WorldStack stack = TestHelpers.SimpleStack(
+            new WorldStackId("stack"),
+            player.Id,
+            new WorldPosition(5, 4),
+            TestHelpers.SingleUnitGrid(new WorldUnitId("leader"), leader),
+            movementPoints: 2);
+        WorldCapital capital = TestHelpers.SimpleCapital(
+            new WorldFortificationId("capital"),
+            defender.Id,
+            new WorldPosition(4, 4),
+            UnitGrid<WorldUnit>.Empty);
+
+        (GameSession session, _) = new TestWorldEngineBuilder()
+            .WithMap(map)
+            .WithDefinition(leader)
+            .WithDefinition(TestHelpers.SimpleLord(player.LordId, player.Race, LordCategory.Warrior))
+            .WithPlayer(player)
+            .WithDefinition(TestHelpers.SimpleLord(defender.LordId, defender.Race, LordCategory.Warrior))
+            .WithPlayer(defender)
+            .WithDefinition(TestHelpers.SimpleLord(otherPlayer.LordId, otherPlayer.Race, LordCategory.Warrior))
+            .WithPlayer(otherPlayer)
+            .WithStack(stack)
+            .WithCapital(capital)
+            .BuildSession();
+
+        GameModel gameModel = new(session, TestGameTextProvider.Instance, NullLog.Instance, SynchronousTaskScheduler.Instance);
+        GameViewModel gameViewModel = new TestGameViewModelBuilder().Build();
+        WorldScreenViewModel world = new(gameModel, gameViewModel, new RandomProvider(0));
+        gameViewModel.ShowScreen(world);
+        world.CompleteGameStart();
+
+        await gameModel.World.DispatchCommandAsync(new WorldStartGameCommand());
+        await gameModel.World.DispatchCommandAsync(new WorldMoveStackCommand(stack.Id, capital.Entrance));
+
+        world.CompleteAnimation();
+
+        LootScreenViewModel loot = Assert.IsOfType<LootScreenViewModel>(gameViewModel.TopScreen);
+
+        Assert.That(loot.Title, Is.EqualTo("Treasure"));
+        Assert.That(loot.Text, Is.EqualTo("You have captured resources."));
+        Assert.That(loot.Resources, Is.EqualTo(new ResourceSetViewModel(new WorldResourceSet(300, 0, 0, 0, 50, 0), ResourceSetProjection.All)));
+        Assert.That(loot.Items, Is.Empty);
+
+        loot.Close();
+
+        Assert.That(gameViewModel.TopScreen, Is.SameAs(world));
+        Assert.That(world.IsActive, Is.True);
+    }
+
+    [Test]
+    public async Task MissingRodStackTest()
+    {
+        WorldMap map = TestHelpers.SimpleMap(6, 6);
+        WorldPlayer player = TestHelpers.SimplePlayer(new WorldPlayerId(1), WorldRace.Undead, map);
+
+        (GameSession session, _) = new TestWorldEngineBuilder()
+            .WithMap(map)
+            .WithDefinition(TestHelpers.SimpleLord(player.LordId, player.Race, LordCategory.Warrior))
+            .WithPlayer(player)
+            .WithSubrace(TestHelpers.NeutralSubrace)
+            .BuildSession();
+
+        GameModel gameModel = new(session, TestGameTextProvider.Instance, NullLog.Instance, SynchronousTaskScheduler.Instance);
+        GameViewModel gameViewModel = new TestGameViewModelBuilder().Build();
+        WorldScreenViewModel world = new(gameModel, gameViewModel, new RandomProvider(0));
+        gameViewModel.ShowScreen(world);
+        world.CompleteGameStart();
+
+        await world.ActivateStackActionCommand.ExecuteAsync(new WorldStackAction.CreateRod(new WorldStackId("missing")));
+
+        Assert.That(gameViewModel.Alert.Current, Is.EqualTo(new Alert(
+            AlertType.Error,
+            IconMoniker.Warning,
+            "This party is no longer available",
+            Details: null)));
+        Assert.That(world.ActionPromptText, Is.Null);
+    }
+
+    [Test]
+    public async Task AiTurnPortraitTest()
+    {
+        WorldMap map = TestHelpers.SimpleMap(4, 1);
+        WorldPlayer human = TestHelpers.SimplePlayer(new WorldPlayerId(1), WorldRace.Undead, map);
+        WorldPlayer ai = TestHelpers.SimplePlayer(new WorldPlayerId(2), WorldRace.Heretic, map) with
+        {
+            IsAi = true,
+            FaceVariant = new WorldObjectVariant(2)
+        };
+
+        UnitDefinition leader = TestHelpers.SimpleLeaderDefinition(
+            TestHelpers.SimpleUnitDefinition("Leader", maxHitpoints: 100, initiative: 50, damage: 10),
+            movementPoints: 6, leadership: 6);
+        IGameDefinitionProvider stackDefinitions = new TestGameDefinitionProviderBuilder()
+            .AddUnit(leader)
+            .Build();
+
+        WorldStack mover = TestHelpers.SimpleStack(
+                new WorldStackId("Mover"),
+                ai.Id,
+                new WorldPosition(0, 0),
+                TestHelpers.StackUnitGrid(
+                    stackDefinitions,
+                    [(new WorldUnit(new WorldUnitId("leader"), leader.Id, 100, 0, 1, [], null, false), GridPosition.FrontBottom)]),
+                movementPoints: 6) with
+            {
+                Order = new WorldStackOrder.MoveToLocation(new ScenarioLocationId("Target"), new WorldPosition(2, 0), Radius: 0)
+            };
+
+        (GameSession session, _) = new TestWorldEngineBuilder()
+            .WithMap(map)
+            .WithDefinition(leader)
+            .WithDefinition(TestHelpers.SimpleLord(human.LordId, human.Race, LordCategory.Warrior))
+            .WithPlayer(human)
+            .WithDefinition(TestHelpers.SimpleLord(ai.LordId, ai.Race, LordCategory.Warrior))
+            .WithPlayer(ai)
+            .WithStack(mover)
+            .WithSubrace(TestHelpers.NeutralSubrace)
+            .BuildSession();
+
+        GameModel gameModel = new(session, TestGameTextProvider.Instance, NullLog.Instance, SynchronousTaskScheduler.Instance);
+        GameViewModel gameViewModel = new TestGameViewModelBuilder().Build();
+        WorldScreenViewModel world = new(gameModel, gameViewModel, new RandomProvider(0));
+        gameViewModel.ShowScreen(world);
+        world.CompleteGameStart();
+
+        await gameModel.World.DispatchCommandAsync(new WorldStartGameCommand());
+
+        Assert.That(world.IsViewPlayerTurn, Is.True);
+        Assert.That(world.CurrentPlayerPortraitKey, Is.Null);
+
+        await world.EndTurnCommand.ExecuteAsync(null);
+
+        Assert.That(gameModel.Snapshot.WorldState.TurnInfo.CurrentPlayerId, Is.EqualTo(human.Id));
+        Assert.That(world.RenderRequest.Animation, Is.EqualTo(new WorldAnimationState.StackMove(
+            mover.Id,
+            [
+                new WorldAnimationState.StackMoveStep(new WorldPosition(0, 0), WorldStackDirection.SouthEast, TimeSpan.Zero),
+                new WorldAnimationState.StackMoveStep(new WorldPosition(1, 0), WorldStackDirection.SouthEast, TimeSpan.FromMilliseconds(200)),
+                new WorldAnimationState.StackMoveStep(new WorldPosition(2, 0), WorldStackDirection.SouthEast, TimeSpan.FromMilliseconds(400))
+            ])));
+        Assert.That(world.IsViewPlayerTurn, Is.False);
+        Assert.That(world.CurrentPlayerPortraitKey, Is.EqualTo(new AssetSpriteKey.LordFace(WorldRace.Heretic, 2, IsLarge: true)));
+
+        world.CompleteAnimation();
+
+        Assert.That(world.RenderRequest.Animation, Is.Null);
+        Assert.That(world.IsViewPlayerTurn, Is.True);
+        Assert.That(world.CurrentPlayerPortraitKey, Is.Null);
     }
 }

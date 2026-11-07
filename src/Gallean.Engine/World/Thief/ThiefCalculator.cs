@@ -14,8 +14,13 @@ internal static partial class ThiefCalculator
         return leaderDefinition.LeaderCategory == UnitLeaderCategory.Thief;
     }
 
-    public static bool IsActionAllowed(WorldThiefActionType type, LordDefinition lord)
+    public static bool IsActionAllowed(WorldThiefActionType type, WorldPlayer player, LordDefinition lord)
     {
+        if (player.IsAi)
+        {
+            return true;
+        }
+
         return type switch
         {
             WorldThiefActionType.PoisonStack => true,
@@ -38,6 +43,11 @@ internal static partial class ThiefCalculator
     public static bool CanReachTarget(WorldStack thief, ThiefTarget target)
     {
         return target.Accept(ReachVisitor.Instance, thief);
+    }
+
+    public static WorldUnitGroup? GetUnitGroup(ThiefTarget target)
+    {
+        return target.Accept(UnitGroupVisitor.Instance, Empty.Value);
     }
 
     public static ImmutableArray<WorldThiefActionType> GetActionTypes(ThiefTarget target)

@@ -10,6 +10,11 @@ internal sealed partial record WorldRenderState
         public abstract TimeSpan Duration { get; }
 
         public abstract TResult Accept<TContext, TResult>(IWorldAnimationVisitor<TContext, TResult> visitor, TContext context);
+
+        public virtual bool Continues(WorldAnimation previous)
+        {
+            return false;
+        }
     }
 
     public sealed record StackMoveStep(
@@ -34,6 +39,14 @@ internal sealed partial record WorldRenderState
         public override TResult Accept<TContext, TResult>(IWorldAnimationVisitor<TContext, TResult> visitor, TContext context)
         {
             return visitor.Visit(this, context);
+        }
+
+        public override bool Continues(WorldAnimation previous)
+        {
+            return previous is StackMove move &&
+                   move.StackId == StackId &&
+                   move.Steps.Count <= Steps.Count &&
+                   move.Steps[^1].Position == Steps[move.Steps.Count - 1].Position;
         }
 
         public bool Equals(StackMove? other)
@@ -125,6 +138,69 @@ internal sealed partial record WorldRenderState
             return visitor.Visit(this, context);
         }
     }
+
+    public sealed record TerrainExpansion(
+        AssetSoundKey SoundKey,
+        MapTerrain OldTerrain,
+        IReadOnlyList<TerrainExpansionTile> Tiles,
+        IReadOnlyList<TerrainExpansionTree> Trees,
+        TimeSpan Fade,
+        TimeSpan Duration) : WorldAnimation
+    {
+        public override TimeSpan Duration { get; } = Duration;
+
+        public override TResult Accept<TContext, TResult>(IWorldAnimationVisitor<TContext, TResult> visitor, TContext context)
+        {
+            return visitor.Visit(this, context);
+        }
+
+        public bool Equals(TerrainExpansion? other)
+        {
+            if (other is null)
+            {
+                return false;
+            }
+
+            if (ReferenceEquals(this, other))
+            {
+                return true;
+            }
+
+            return SoundKey == other.SoundKey &&
+                   OldTerrain == other.OldTerrain &&
+                   Tiles.SequenceEqual(other.Tiles) &&
+                   Trees.SequenceEqual(other.Trees) &&
+                   Fade == other.Fade &&
+                   Duration == other.Duration;
+        }
+
+        public override int GetHashCode()
+        {
+            HashCode hash = new();
+
+            hash.Add(SoundKey);
+            hash.Add(OldTerrain);
+            hash.AddSequence(Tiles);
+            hash.AddSequence(Trees);
+            hash.Add(Fade);
+            hash.Add(Duration);
+
+            return hash.ToHashCode();
+        }
+    }
+
+    public sealed record TerrainExpansionTile(
+        WorldPosition Position,
+        TimeSpan TopStart,
+        TimeSpan RightStart,
+        TimeSpan BottomStart,
+        TimeSpan LeftStart);
+
+    public sealed record TerrainExpansionTree(
+        WorldPosition Position,
+        int Depth,
+        AssetSpriteKey AssetKey,
+        TimeSpan Start);
 
     public abstract record SpellCastLayer(int Depth)
     {

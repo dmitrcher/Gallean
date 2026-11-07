@@ -1090,6 +1090,31 @@ public sealed class VisualTests
     }
 
     [AvaloniaTest]
+    public async Task WorldEnemyTurnTest()
+    {
+        using Sandbox sb = Sandbox.Create();
+
+        GameModel gameModel = LoadScenario(null);
+
+        (GameViewModel gameViewModel, GameView window) = Initialize(sb, BaseWidth, BaseHeight);
+
+        await gameModel.World.DispatchCommandAsync(new WorldStartGameCommand());
+        await gameModel.World.DispatchCommandAsync(new WorldEndTurnCommand());
+
+        WorldScreenViewModel world = new(gameModel, gameViewModel, new RandomProvider(0));
+        gameViewModel.ShowScreen(world);
+
+        WorldScreenView view = await WaitForWorldAsync(window);
+        Border portrait = view.GetVisualDescendants().OfType<Border>().First(border => border.Classes.Contains("current-player-portrait"));
+        await WaitUntilAsync(() => portrait.Opacity >= 1);
+
+        Assert.That(world.IsViewPlayerTurn, Is.False);
+        Assert.That(portrait.Opacity, Is.EqualTo(1.0));
+
+        await CaptureAsync(window);
+    }
+
+    [AvaloniaTest]
     public async Task WorldObjectiveCollapsedTest()
     {
         using Sandbox sb = Sandbox.Create();
@@ -1377,6 +1402,26 @@ public sealed class VisualTests
     }
 
     [AvaloniaTest]
+    public async Task WorldCapturedResourcesLootTest()
+    {
+        using Sandbox sb = Sandbox.Create();
+
+        GameModel gameModel = LoadScenario(null);
+
+        (GameViewModel gameViewModel, GameView window) = Initialize(sb, BaseWidth, BaseHeight);
+
+        await gameModel.World.DispatchCommandAsync(new WorldStartGameCommand());
+        WorldScreenViewModel world = new(gameModel, gameViewModel, new RandomProvider(0));
+        gameViewModel.ShowScreen(world);
+
+        await WaitForWorldAsync(window);
+
+        gameViewModel.OpenScreen(LootScreenViewModel.CreateForCapturedResources(new WorldResourceSet(1250, 0, 0, 0, 180, 0)));
+
+        await CaptureAsync(window);
+    }
+
+    [AvaloniaTest]
     public async Task WorldThiefActionResultTest()
     {
         using Sandbox sb = Sandbox.Create();
@@ -1391,7 +1436,27 @@ public sealed class VisualTests
 
         await WaitForWorldAsync(window);
 
-        gameViewModel.OpenScreen(new ThiefActionResultScreenViewModel(WorldThiefActionType.StealGold, isSuccess: true));
+        gameViewModel.OpenScreen(ThiefActionResultScreenViewModel.CreateMineResult(WorldThiefActionType.StealGold, isSuccess: true));
+
+        await CaptureAsync(window);
+    }
+
+    [AvaloniaTest]
+    public async Task WorldThiefActionCapturedTest()
+    {
+        using Sandbox sb = Sandbox.Create();
+
+        GameModel gameModel = LoadScenario(null);
+
+        (GameViewModel gameViewModel, GameView window) = Initialize(sb, BaseWidth, BaseHeight);
+
+        await gameModel.World.DispatchCommandAsync(new WorldStartGameCommand());
+        WorldScreenViewModel world = new(gameModel, gameViewModel, new RandomProvider(0));
+        gameViewModel.ShowScreen(world);
+
+        await WaitForWorldAsync(window);
+
+        gameViewModel.OpenScreen(ThiefActionResultScreenViewModel.CreateMineResult(WorldThiefActionType.StealGold, isSuccess: false));
 
         await CaptureAsync(window);
     }
@@ -1881,6 +1946,41 @@ public sealed class VisualTests
         window.MouseMove(Assert.NotNull(socket.TranslatePoint(new Point(23, 23), window)));
 
         await CaptureAsync(window, "hover");
+    }
+
+    [AvaloniaTest]
+    public async Task WorldPlantRodTest()
+    {
+        using Sandbox sb = Sandbox.Create();
+
+        GameModel scenario = LoadScenario(null);
+
+        WorldState state = scenario.World.State;
+        WorldPlan plan = WorldPlan.For(state);
+        WorldStack hero = Assert.NotNull(plan.GetStackAt(new WorldPosition(10, 14)));
+        (WorldUnit heroLeader, _, _) = hero.GetLeader(scenario.Definitions);
+        WorldUnit rodLeader = heroLeader with { DefinitionId = new UnitDefinitionId("G000UU0022") };
+        WorldStack planter = hero with { Position = new WorldPosition(13, 18), Units = hero.Units.Replace(heroLeader, rodLeader) };
+
+        GameModel gameModel = LoadScenario(state with { Stacks = state.Stacks.SetItem(hero.Id, planter) });
+
+        (GameViewModel gameViewModel, GameView window) = Initialize(sb, BaseWidth, BaseHeight);
+
+        await gameModel.World.DispatchCommandAsync(new WorldStartGameCommand());
+        WorldScreenViewModel viewModel = new(gameModel, gameViewModel, new RandomProvider(0));
+        gameViewModel.ShowScreen(viewModel);
+
+        WorldScreenView view = await WaitForWorldAsync(window);
+
+        await viewModel.HandleMapClickAsync(new WorldPosition(13, 18), null, 1);
+        view.Camera.LookAt(WorldTransform.ToWorldPoint(new WorldPosition(13, 18)));
+
+        await viewModel.ActivateStackActionCommand.ExecuteAsync(new WorldStackAction.CreateRod(planter.Id));
+
+        Assert.That(viewModel.ActionPromptText, Is.EqualTo("Select a tile to plant a rod on."));
+        Assert.That(viewModel.ActionPromptCost, Is.EqualTo(new ResourceSetViewModel(new WorldResourceSet(150, 0, 0, 0, 0, 0), ResourceSetProjection.All)));
+
+        await CaptureAsync(window, "prompt");
     }
 
     [AvaloniaTest]

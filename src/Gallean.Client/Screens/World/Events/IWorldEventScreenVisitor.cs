@@ -8,9 +8,11 @@ internal interface IWorldEventScreenVisitor<out TResult>
     TResult Visit(WorldEventAction.RuinLoot action);
     TResult Visit(WorldEventAction.ItemsReceive action);
     TResult Visit(WorldEventAction.SpellsReceive action);
+    TResult Visit(WorldEventAction.ResourcesCapture action);
     TResult Visit(WorldEventAction.LeaderUpgrade action);
     TResult Visit(WorldEventAction.DiplomacyProposal action);
     TResult Visit(WorldEventAction.ThiefAction action);
-    TResult Visit(WorldEventAction.ThiefActionResult action);
+    TResult Visit(WorldEventAction.ThiefActionMineResult action);
+    TResult Visit(WorldEventAction.ThiefActionTheirResult action);
     TResult Visit(WorldEventAction.SiteEnter action);
 }
