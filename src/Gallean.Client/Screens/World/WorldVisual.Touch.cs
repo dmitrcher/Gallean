@@ -195,6 +195,11 @@ internal sealed partial class WorldVisual
         WorldPosition? hitPosition = HitTestWorld(worldPoint);
         WorldPosition tile = WorldTransform.FromWorldPoint(worldPoint);
 
+        if (ViewModel.TryHandleTouchAction(tile, hitPosition))
+        {
+            return;
+        }
+
         // Without hover, the first tap on a destination shows the path and a second tap on it moves there.
         if (clickCount == 1 && ViewModel.TryPreviewMove(tile, hitPosition))
         {

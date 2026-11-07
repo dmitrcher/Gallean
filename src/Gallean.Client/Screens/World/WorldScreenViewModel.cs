@@ -254,6 +254,43 @@ internal sealed partial class WorldScreenViewModel :
     }
 
     /// <summary>
+    /// Applies the selected map action (a spell, an item or a rod) for a touch tap.
+    /// Without hover there is no cursor to show valid targets, and a finger on a stack usually lands on the tile
+    /// behind its figure, so the object under the finger is tried as well. An invalid tap keeps the action selected
+    /// so the player can tap again. Returns false when no action is selected.
+    /// </summary>
+    public bool TryHandleTouchAction(WorldPosition tile, WorldPosition? objectPosition)
+    {
+        WorldCursorAction? action = cursor.Action;
+
+        if (action is null || IsBusy)
+        {
+            return false;
+        }
+
+        if (!TryDispatchTouchAction(action, tile) &&
+            (!objectPosition.HasValue || !TryDispatchTouchAction(action, objectPosition.GetValueOrDefault())))
+        {
+            Game.PlaySound(new AssetSoundKey.Beep());
+        }
+
+        return true;
+    }
+
+    private bool TryDispatchTouchAction(WorldCursorAction action, WorldPosition position)
+    {
+        if (!WorldState.Map.IsValidPosition(position) ||
+            GameModel.World.DryRunCommand(action.CreateCommand(position)).Error is not null)
+        {
+            return false;
+        }
+
+        DispatchSelectedActionAsync(action, position).FileAndForget();
+
+        return true;
+    }
+
+    /// <summary>
     /// Shows the path to a tapped destination without moving, for touch screens where there is no hover.
     /// Returns false when the tap should act as a click: on anything that is not a move, or on the destination
     /// whose path is already shown.
