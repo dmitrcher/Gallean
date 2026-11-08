@@ -2,7 +2,6 @@ using System.Collections.Immutable;
 using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Gallean.Common;
 using Gallean.Engine;
 
 namespace Gallean.Client;
@@ -28,15 +27,15 @@ internal sealed partial class LeaderExportScreenViewModel : AbstractGameScreenVi
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ExportCommand))]
-    public partial LeaderExportCandidateViewModel? SelectedLeader { get; set; }
+    public partial LeaderExportLeaderViewModel? SelectedLeader { get; set; }
 
     [ObservableProperty]
     public partial IReadOnlyList<LeaderExportItemViewModel> Items { get; private set; } = [];
 
     [ObservableProperty]
-    public partial TextSpans SelectedItemsText { get; private set; } = TextSpans.Empty;
+    public partial string ItemsTitle { get; private set; } = "";
 
-    public IReadOnlyList<LeaderExportCandidateViewModel> Leaders { get; }
+    public IReadOnlyList<LeaderExportLeaderViewModel> Leaders { get; }
 
     public string Instruction => Tr("Select a leader and up to {0} items to bring to the next quest.", scenarioExporter.ItemLimit);
 
@@ -142,27 +141,9 @@ internal sealed partial class LeaderExportScreenViewModel : AbstractGameScreenVi
         };
     }
 
-    private static string FormatLeaderSummary(int level, int battlesWon)
+    private IReadOnlyList<LeaderExportLeaderViewModel> BuildLeaders()
     {
-        JoinStringBuilder sb = new(" · ");
-
-        sb.Add(Tr("Level {0}", level));
-
-        if (battlesWon == 1)
-        {
-            sb.Add(Tr("1 battle won"));
-        }
-        else
-        {
-            sb.Add(Tr("{0} battles won", battlesWon));
-        }
-
-        return sb.ToString();
-    }
-
-    private IReadOnlyList<LeaderExportCandidateViewModel> BuildLeaders()
-    {
-        List<LeaderExportCandidateViewModel> result = [];
+        List<LeaderExportLeaderViewModel> result = [];
 
         IEnumerable<WorldStack> stacks = scenarioExporter
             .GetExportableStacks(WorldState, ViewPlayerId)
@@ -171,15 +152,23 @@ internal sealed partial class LeaderExportScreenViewModel : AbstractGameScreenVi
         foreach (WorldStack stack in stacks)
         {
             (WorldUnit leader, _, _) = stack.GetLeader(GameModel.Definitions);
+            List<AssetSpriteKey.ItemIcon> itemIcons = [];
+
+            foreach (WorldItem item in stack.Equipment.Items.Values)
+            {
+                itemIcons.Add(ItemIconResolver.Resolve(GameModel.Definitions, item.DefinitionId));
+            }
 
             UnitDetailsViewModel details = UnitDetailsViewModel.CreateFromWorld(
                 leader, WorldState.Players[stack.OwnerId], GameModel.Definitions, GameModel.Texts, GameModel.Stats);
 
-            result.Add(new LeaderExportCandidateViewModel(
+            result.Add(new LeaderExportLeaderViewModel(
                 stack.Id,
                 new AssetSpriteKey.UnitPortrait(leader.DefinitionId),
                 UnitNameResolver.Resolve(leader, GameModel.Definitions, GameModel.Texts),
-                FormatLeaderSummary(leader.Level, stack.BattlesWon),
+                LeaderFormatter.FormatLevel(leader.Level),
+                LeaderFormatter.FormatBattlesWon(stack.BattlesWon),
+                itemIcons,
                 details));
         }
 
@@ -189,7 +178,7 @@ internal sealed partial class LeaderExportScreenViewModel : AbstractGameScreenVi
     private void RefreshItems()
     {
         Items = BuildItems();
-        SelectedItemsText = TrSpans("Selected items: {0:*} / {1:*}", selectedItems.Count, scenarioExporter.ItemLimit);
+        ItemsTitle = Tr("Items ({0} / {1})", selectedItems.Count, scenarioExporter.ItemLimit);
     }
 
     private IReadOnlyList<LeaderExportItemViewModel> BuildItems()
@@ -212,6 +201,7 @@ internal sealed partial class LeaderExportScreenViewModel : AbstractGameScreenVi
                 }
             }
 
+            ItemDefinition definition = GameModel.Definitions.GetItem(group.DefinitionId);
             ItemDetailsViewModel details = ItemDetailsViewModel.Create(
                 group.DefinitionId,
                 group.Charges,
@@ -224,6 +214,7 @@ internal sealed partial class LeaderExportScreenViewModel : AbstractGameScreenVi
                 group.Items,
                 ItemIconResolver.Resolve(GameModel.Definitions, group.DefinitionId),
                 ItemFormatter.FormatName(GameModel.Definitions, GameModel.Texts, group.DefinitionId, group.Charges),
+                new OfferPriceViewModel(definition.Value),
                 selected,
                 canAdd: selected < group.Items.Length && !limitReached,
                 details));

@@ -9,6 +9,7 @@ public static class AppDirectories
     public static string Downloads => Path.Combine(Root, "Downloads");
     public static string EnhanceCache => Path.Combine(Root, "Enhance", "Cache");
     public static string EnhanceModels => Path.Combine(Root, "Enhance", "Models");
+    public static string Leaders => Path.Combine(Root, "Leaders");
     public static string Libraries => Path.Combine(Root, "Libraries");
     public static string Logs => Path.Combine(Root, "Logs");
     public static string OriginalAssets => Path.Combine(Root, "OriginalAssets");

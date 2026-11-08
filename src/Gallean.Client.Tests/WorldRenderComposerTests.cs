@@ -1099,6 +1099,79 @@ public sealed class WorldRenderComposerTests
     }
 
     [Test]
+    public void MountainCloudsTest()
+    {
+        IGameDefinitionProvider definitions = new TestGameDefinitionProviderBuilder().Build();
+
+        WorldMap map = TestHelpers.SimpleMap(12, 12);
+
+        WorldPlayer human = TestHelpers.SimplePlayer(new WorldPlayerId(1), WorldRace.Human, map);
+
+        WorldMountain cloudedMountain = new(
+            Id: new WorldMountainId(1),
+            Footprint: new WorldFootprint(new WorldPosition(1, 1), 5, 5),
+            Race: WorldRace.Neutral,
+            Variant: new WorldObjectVariant(2));
+
+        WorldMountain clearMountain = new(
+            Id: new WorldMountainId(2),
+            Footprint: new WorldFootprint(new WorldPosition(0, 0), 5, 5),
+            Race: WorldRace.Neutral,
+            Variant: new WorldObjectVariant(3));
+
+        WorldMountain smallMountain = new(
+            Id: new WorldMountainId(3),
+            Footprint: new WorldFootprint(new WorldPosition(2, 0), 1, 1),
+            Race: WorldRace.Neutral,
+            Variant: new WorldObjectVariant(0));
+
+        WorldState state = new TestWorldEngineBuilder()
+            .WithMap(map)
+            .WithDefinition(TestHelpers.SimpleLord(human.LordId, human.Race, LordCategory.Warrior))
+            .WithPlayer(human)
+            .WithMountain(cloudedMountain)
+            .WithMountain(clearMountain)
+            .WithMountain(smallMountain)
+            .Build()
+            .State;
+
+        WorldRenderState renderState = Compose(state, definitions, fogEnabled: false, cursor: WorldCursor.Empty);
+
+        Assert.That(renderState.MapObjects, Is.EqualTo(new MapObject[]
+        {
+            new Mountain(
+                Position: new WorldPosition(2, 0),
+                Depth: 1416,
+                Footprint: smallMountain.Footprint,
+                AssetKey: new AssetSpriteKey.Mountain(WorldRace.Neutral, 1, 0)),
+            new Mountain(
+                Position: new WorldPosition(0, 0),
+                Depth: 2440,
+                Footprint: clearMountain.Footprint,
+                AssetKey: new AssetSpriteKey.Mountain(WorldRace.Neutral, 5, 3)),
+            new MountainCloud(
+                Position: new WorldPosition(1, 1),
+                Depth: 3459,
+                Footprint: cloudedMountain.Footprint,
+                MountainKey: new AssetSpriteKey.Mountain(WorldRace.Neutral, 5, 2),
+                Phase: 0.5289394550625884,
+                Layer: MountainCloudLayer.Back),
+            new Mountain(
+                Position: new WorldPosition(1, 1),
+                Depth: 3464,
+                Footprint: cloudedMountain.Footprint,
+                AssetKey: new AssetSpriteKey.Mountain(WorldRace.Neutral, 5, 2)),
+            new MountainCloud(
+                Position: new WorldPosition(1, 1),
+                Depth: 3466,
+                Footprint: cloudedMountain.Footprint,
+                MountainKey: new AssetSpriteKey.Mountain(WorldRace.Neutral, 5, 2),
+                Phase: 0.5289394550625884,
+                Layer: MountainCloudLayer.Front)
+        }));
+    }
+
+    [Test]
     public void BagTest()
     {
         IGameDefinitionProvider definitions = new TestGameDefinitionProviderBuilder().Build();
@@ -4583,5 +4656,92 @@ public sealed class WorldRenderComposerTests
             TimeSpan.FromMilliseconds(500.0),
             TimeSpan.FromMilliseconds(974.0))));
         Assert.That(second.Animation, Is.SameAs(first.Animation));
+    }
+
+    [Test]
+    public void RiotHighlightsTest()
+    {
+        IGameDefinitionProvider definitions = new TestGameDefinitionProviderBuilder().Build();
+
+        WorldMap map = TestHelpers.SimpleMap(10, 10);
+
+        WorldPlayer human = TestHelpers.SimplePlayer(new WorldPlayerId(1), WorldRace.Human, map) with
+        {
+            FogOfWar = TestHelpers.BuildFogOfWar([
+                "..........",
+                "..........",
+                "..........",
+                "..........",
+                "..........",
+                "??????????",
+                "??????????",
+                "??????????",
+                "??????????",
+                "??????????"
+            ])
+        };
+
+        WorldCity riotCity = new(
+            Id: new WorldFortificationId("c1"),
+            NameTextId: new ScenarioTextId("Name"),
+            DefinitionId: new WorldCityDefinitionId(WorldRace.Human, 2),
+            OwnerId: human.Id,
+            SubraceId: TestHelpers.NeutralSubrace.Id,
+            Footprint: new WorldFootprint(new WorldPosition(0, 0), 4, 4),
+            Garrison: UnitGrid<WorldUnit>.Empty,
+            Inventory: WorldInventory.Empty,
+            AiPriority: 3,
+            RiotTurns: 2,
+            GrowthTurn: 0);
+
+        WorldCity calmCity = new(
+            Id: new WorldFortificationId("c2"),
+            NameTextId: new ScenarioTextId("Name"),
+            DefinitionId: new WorldCityDefinitionId(WorldRace.Human, 2),
+            OwnerId: human.Id,
+            SubraceId: TestHelpers.NeutralSubrace.Id,
+            Footprint: new WorldFootprint(new WorldPosition(5, 0), 4, 4),
+            Garrison: UnitGrid<WorldUnit>.Empty,
+            Inventory: WorldInventory.Empty,
+            AiPriority: 3,
+            RiotTurns: 0,
+            GrowthTurn: 0);
+
+        WorldCity foggedRiotCity = new(
+            Id: new WorldFortificationId("c3"),
+            NameTextId: new ScenarioTextId("Name"),
+            DefinitionId: new WorldCityDefinitionId(WorldRace.Human, 2),
+            OwnerId: human.Id,
+            SubraceId: TestHelpers.NeutralSubrace.Id,
+            Footprint: new WorldFootprint(new WorldPosition(5, 5), 4, 4),
+            Garrison: UnitGrid<WorldUnit>.Empty,
+            Inventory: WorldInventory.Empty,
+            AiPriority: 3,
+            RiotTurns: 3,
+            GrowthTurn: 0);
+
+        WorldState state = new TestWorldEngineBuilder()
+            .WithMap(map)
+            .WithDefinition(TestHelpers.SimpleLord(human.LordId, human.Race, LordCategory.Warrior))
+            .WithPlayer(human)
+            .WithDefinition(TestHelpers.SimpleCityDefinition(new WorldCityDefinitionId(WorldRace.Human, 2), WorldResourceSet.Empty))
+            .WithCity(riotCity)
+            .WithCity(calmCity)
+            .WithCity(foggedRiotCity)
+            .Build()
+            .State;
+
+        WorldRenderState renderState = Compose(state, definitions, fogEnabled: true, cursor: WorldCursor.Empty);
+
+        Assert.That(renderState.Highlights, Is.EqualTo(new HighlightOverlay(
+        [
+            new Highlight(
+                new Fortification(
+                    Position: new WorldPosition(3, 3),
+                    Depth: 1949,
+                    Footprint: riotCity.Footprint,
+                    AssetKey: new AssetAnimationKey.City(2)),
+                Theme.World.Highlight.RiotColor)
+        ])));
     }
 }

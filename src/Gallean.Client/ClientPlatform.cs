@@ -36,6 +36,11 @@ public static class ClientPlatform
     public static bool IsTouchFirst { get; set; }
 
     /// <summary>
+    /// Whether the main menu offers new desktop releases. Platforms that ship their own builds turn it off.
+    /// </summary>
+    public static bool ChecksForUpdates { get; set; } = true;
+
+    /// <summary>
     /// The GPU resource cache limit for Skia. Mobile GPUs share memory with the system and need a smaller cache.
     /// </summary>
     public static long? MaxGpuResourceSizeBytes { get; set; }

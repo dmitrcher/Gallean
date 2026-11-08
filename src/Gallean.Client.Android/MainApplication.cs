@@ -88,6 +88,7 @@ public sealed class MainApplication : AvaloniaAndroidApplication<Avalonia.Applic
         ClientPlatform.AssetPackDirectory = AppDirectories.Assets;
         ClientPlatform.ImportsAssetPack = true;
         ClientPlatform.IsTouchFirst = true;
+        ClientPlatform.ChecksForUpdates = false;
         ClientPlatform.MaxGpuResourceSizeBytes = MaxGpuResourceSizeBytes;
         ClientPlatform.CreateAudioDevice = static () => new AndroidAudioPlayer();
         ClientPlatform.Exit = MainActivity.ExitApplication;

@@ -1,4 +1,4 @@
-﻿using System.Collections.Immutable;
+using System.Collections.Immutable;
 using System.Diagnostics;
 using System.IO.Compression;
 using System.Text;
@@ -66,6 +66,7 @@ public sealed class VisualTests
             .WithAssets(assets)
             .WithAudioPlayer(audioPlayer)
             .WithSaveStore(new GameSaveStore(sb.GetPath("saves"), 10))
+            .WithLeaderStore(new LeaderStore(sb.GetPath("leaders")))
             .WithSettingsStore(new GameSettingsStore(sb.GetPath("config")))
             .Build();
 
@@ -666,6 +667,51 @@ public sealed class VisualTests
     }
 
     [AvaloniaTest]
+    public async Task GameMenuTest()
+    {
+        using Sandbox sb = Sandbox.Create();
+
+        GameModel gameModel = LoadScenario(null);
+
+        (GameViewModel gameViewModel, GameView window) = Initialize(sb, BaseWidth, BaseHeight);
+
+        await gameModel.World.DispatchCommandAsync(new WorldStartGameCommand());
+
+        WorldScreenViewModel world = new(gameModel, gameViewModel, new RandomProvider(0));
+        gameViewModel.ShowScreen(world);
+
+        await WaitForWorldAsync(window);
+
+        world.OpenGameMenuCommand.Execute(null);
+
+        await CaptureAsync(window);
+    }
+
+    [AvaloniaTest]
+    public async Task LeaderExportSelectTest()
+    {
+        using Sandbox sb = Sandbox.Create();
+
+        GameModel gameModel = LoadScenario(null);
+
+        (GameViewModel gameViewModel, GameView window) = Initialize(sb, BaseWidth, BaseHeight);
+
+        await gameModel.World.DispatchCommandAsync(new WorldStartGameCommand());
+
+        WorldScreenViewModel world = new(gameModel, gameViewModel, new RandomProvider(0));
+        gameViewModel.ShowScreen(world);
+
+        await WaitForWorldAsync(window);
+
+        world.OpenGameMenuCommand.Execute(null);
+
+        GameMenuViewModel menu = Assert.IsOfType<GameMenuViewModel>(gameViewModel.TopScreen);
+        menu.ExportLeaderCommand.Execute(null);
+
+        await CaptureAsync(window);
+    }
+
+    [AvaloniaTest]
     public async Task SaveGameEmptyTest()
     {
         using Sandbox sb = Sandbox.Create();
@@ -829,6 +875,111 @@ public sealed class VisualTests
         (GameViewModel gameViewModel, GameView window) = Initialize(sb, BaseWidth, BaseHeight);
 
         gameViewModel.ShowScreen(new ScenarioConfigurationScreenViewModel(gameViewModel, texts, definitions, campaign.Scenarios[0], [campaign.PlayRace]));
+
+        await CaptureAsync(window);
+    }
+
+    [AvaloniaTest]
+    public async Task ScenarioConfigurationLeaderNameTest()
+    {
+        using Sandbox sb = Sandbox.Create();
+
+        (IReadOnlyList<GameCampaign> campaigns, IGameTextProvider texts, IGameDefinitionProvider definitions) = new GameLoader(new RandomProvider(0)).LoadCampaigns(Language.English);
+        GameCampaign campaign = campaigns[2];
+
+        (GameViewModel gameViewModel, GameView window) = Initialize(sb, BaseWidth, BaseHeight);
+
+        ScenarioConfigurationScreenViewModel screen = new(gameViewModel, texts, definitions, campaign.Scenarios[0], [campaign.PlayRace]);
+
+        gameViewModel.ShowScreen(screen);
+        screen.EditLeaderNameCommand.Execute(null);
+
+        TextPromptViewModel prompt = Assert.IsOfType<TextPromptViewModel>(gameViewModel.TopScreen);
+
+        prompt.Text = "Aldric";
+
+        await CaptureAsync(window);
+    }
+
+    [AvaloniaTest]
+    public async Task ScenarioConfigurationImportTest()
+    {
+        using Sandbox sb = Sandbox.Create();
+
+        (IReadOnlyList<GameCampaign> campaigns, IGameTextProvider texts, IGameDefinitionProvider definitions) = new GameLoader(new RandomProvider(0)).LoadCampaigns(Language.English);
+        GameScenario scenario = campaigns[0].Scenarios[2];
+        ScenarioRace race = scenario.PlayableRaces[0];
+        UnitDefinitionId leaderId = definitions.GetRace(race.Race).Leaders[0];
+        ItemDefinitionId itemId = new("G000IG1001");
+        ScenarioLeader leader = new(
+            new WorldUnit(new WorldUnitId("S107UN0001"), leaderId, Hitpoints: 180, Experience: 120, Level: 12, [], Name: new LiteralUnitName("Uther"), IsTypeLocked: false),
+            LeaderEquipment.Empty.With(LeaderEquipmentSlot.Banner, new WorldItem(new WorldItemId("Exported1"), itemId, Charges: null)),
+            WorldInventory.Empty,
+            PendingLeaderUpgrades: 0,
+            BattlesWon: 34);
+
+        (GameViewModel gameViewModel, GameView window) = Initialize(sb, BaseWidth, BaseHeight);
+
+        ScenarioConfigurationScreenViewModel screen = new(gameViewModel, texts, definitions, scenario, [race]);
+        screen.ImportLeader(new LeaderEntry(new LeaderId(1), leader));
+        gameViewModel.ShowScreen(screen);
+
+        await CaptureAsync(window);
+    }
+
+    [AvaloniaTest]
+    public async Task LeaderImportTest()
+    {
+        using Sandbox sb = Sandbox.Create();
+
+        (IReadOnlyList<GameCampaign> campaigns, IGameTextProvider texts, IGameDefinitionProvider definitions) = new GameLoader(new RandomProvider(0)).LoadCampaigns(Language.English);
+        GameScenario scenario = campaigns[0].Scenarios[2];
+        ScenarioRace race = scenario.PlayableRaces[0];
+        UnitDefinitionId leaderId = definitions.GetRace(race.Race).Leaders[0];
+        UnitDefinitionId dwarfLeaderId = definitions.GetRace(WorldRace.Dwarf).Leaders[0];
+        ItemDefinitionId itemId = new("G000IG1001");
+        ScenarioLeader leader = new(
+            new WorldUnit(new WorldUnitId("S107UN0001"), leaderId, Hitpoints: 180, Experience: 120, Level: 12, [], Name: new LiteralUnitName("Uther"), IsTypeLocked: false),
+            LeaderEquipment.Empty.With(LeaderEquipmentSlot.Banner, new WorldItem(new WorldItemId("Exported1"), itemId, Charges: null)),
+            WorldInventory.Empty,
+            PendingLeaderUpgrades: 0,
+            BattlesWon: 34);
+        ScenarioLeader dwarfLeader = new(
+            new WorldUnit(new WorldUnitId("S109UN0001"), dwarfLeaderId, Hitpoints: 120, Experience: 0, Level: 20, [], Name: new LiteralUnitName("Thorin"), IsTypeLocked: false),
+            LeaderEquipment.Empty,
+            WorldInventory.Empty,
+            PendingLeaderUpgrades: 0,
+            BattlesWon: 90);
+        LeaderStore store = new(sb.GetPath("leaders"));
+
+        await store.SaveAsync(leader, new DateTimeOffset(2001, 2, 3, 4, 5, 6, TimeSpan.Zero), null);
+        await store.SaveAsync(dwarfLeader, new DateTimeOffset(2001, 2, 3, 4, 5, 6, TimeSpan.Zero), null);
+
+        (GameViewModel gameViewModel, GameView window) = Initialize(sb, BaseWidth, BaseHeight);
+
+        ScenarioConfigurationScreenViewModel screen = new(gameViewModel, texts, definitions, scenario, [race]);
+        gameViewModel.ShowScreen(screen);
+
+        await screen.ImportLeaderCommand.ExecuteAsync(null);
+
+        await CaptureAsync(window);
+    }
+
+    [AvaloniaTest]
+    public async Task LeaderImportEmptyTest()
+    {
+        using Sandbox sb = Sandbox.Create();
+
+        (IReadOnlyList<GameCampaign> campaigns, IGameTextProvider texts, IGameDefinitionProvider definitions) = new GameLoader(new RandomProvider(0)).LoadCampaigns(Language.English);
+        GameScenario scenario = campaigns[0].Scenarios[2];
+        ScenarioRace race = scenario.PlayableRaces[0];
+
+        (GameViewModel gameViewModel, GameView window) = Initialize(sb, BaseWidth, BaseHeight);
+
+        ScenarioConfigurationScreenViewModel screen = new(gameViewModel, texts, definitions, scenario, [race]);
+        gameViewModel.ShowScreen(screen);
+
+        await screen.ImportLeaderCommand.ExecuteAsync(null);
 
         await CaptureAsync(window);
     }
@@ -5535,6 +5686,53 @@ public sealed class VisualTests
     }
 
     [AvaloniaTest]
+    public async Task BattleAutoBattleTest()
+    {
+        using Sandbox sb = Sandbox.Create();
+
+        GameModel gameModel = LoadScenario(null);
+        WorldRaceDefinition attackers = gameModel.Definitions.GetRace(WorldRace.Human);
+        WorldRaceDefinition defenders = gameModel.Definitions.GetRace(WorldRace.Undead);
+
+        BattleStateBuilder builder = new(gameModel.Definitions);
+
+        builder.Add(MakeBattleUnit(0, attackers.Leaders[0], BattleSide.Attacker, gameModel));
+        builder.Add(MakeBattleUnit(1, attackers.Units[0], BattleSide.Attacker, gameModel));
+        builder.Add(MakeBattleUnit(2, attackers.Units[1], BattleSide.Attacker, gameModel));
+
+        builder.Add(MakeBattleUnit(3, defenders.Leaders[0], BattleSide.Defender, gameModel));
+        builder.Add(MakeBattleUnit(4, defenders.Units[0], BattleSide.Defender, gameModel));
+        builder.Add(MakeBattleUnit(5, defenders.Units[1], BattleSide.Defender, gameModel));
+
+        EngineContext engine = new(new RandomProvider(0), gameModel.Definitions, gameModel.Stats, GameScenarioProvider.Empty, new GlobalVariables());
+
+        await gameModel.RunAsync(() =>
+        {
+            gameModel.Session.StartBattle(new BattleSession(
+                engine,
+                builder.Build(BattleModifiers.None, TestHelpers.SimpleBattleInfo()),
+                NullBattleUnitUpgradeResolver.Instance,
+                _ => { },
+                isAttackerAi: false,
+                isDefenderAi: true,
+                canAutoResolve: true,
+                new WorldPosition(0, 0)));
+        });
+        BattleModel battle = Assert.NotNull(gameModel.ActiveBattle);
+
+        (GameViewModel gameViewModel, GameView window) = Initialize(sb, BaseWidth, BaseHeight);
+
+        BattleScreenViewModel screen = new(gameModel, battle, gameViewModel, assets, NullAssetPreloader.Instance, new RandomProvider(0));
+        gameViewModel.ShowScreen(screen);
+
+        await WaitForBattleAsync(window);
+
+        screen.ToggleAutoBattleCommand.Execute(null);
+
+        await CaptureAsync(window);
+    }
+
+    [AvaloniaTest]
     public async Task BattleHoverTest()
     {
         using Sandbox sb = Sandbox.Create();
@@ -6889,5 +7087,20 @@ public sealed class VisualTests
             new BattleUnitTurn(new BattleUnitId(4), BattleUnitTurnType.Normal),
             new BattleUnitTurn(new BattleUnitId(5), BattleUnitTurnType.Normal)
         ]));
+    }
+
+    [AvaloniaTest]
+    public async Task UpdatePromptTest()
+    {
+        using Sandbox sb = Sandbox.Create();
+
+        (GameViewModel gameViewModel, GameView window) = Initialize(sb, BaseWidth, BaseHeight);
+
+        gameViewModel.ShowScreen(new MainMenuScreenViewModel(gameViewModel, saves: []));
+        gameViewModel.OpenScreen(new UpdatePromptViewModel(
+            new UpdateInfo(new ClientVersion("0.14.0", null), new Uri("https://github.com/GalleanDev/Gallean/releases/tag/v0.14.0")),
+            new ClientVersion("0.13.0", "2d40300")));
+
+        await CaptureAsync(window);
     }
 }

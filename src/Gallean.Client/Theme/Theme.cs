@@ -755,6 +755,7 @@ internal static class Theme
             public static Color SelectedColor { get; } = Color.FromRgb(116, 176, 255);
             public static Color ExhaustedColor { get; } = Color.FromRgb(168, 170, 176);
             public static Color HostileColor { get; } = Color.FromRgb(232, 64, 52);
+            public static Color RiotColor { get; } = Color.FromArgb(128, 255, 150, 40);
         }
 
         public static class Reach
@@ -796,6 +797,12 @@ internal static class Theme
             public static Color SkyColor { get; } = Color.FromRgb(178, 216, 238);
             public static Color FoamColor { get; } = Color.FromRgb(236, 250, 252);
             public static Color SunColor { get; } = Color.FromRgb(176, 238, 252);
+        }
+
+        public static class MountainCloud
+        {
+            public static Color LightColor { get; } = Color.FromRgb(236, 232, 226);
+            public static Color ShadowColor { get; } = Color.FromRgb(112, 122, 144);
         }
 
         public static class Race

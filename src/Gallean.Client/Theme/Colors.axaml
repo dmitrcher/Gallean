@@ -939,6 +939,7 @@
   <SolidColorBrush x:Key="WorldHighlightSelectedBrush" Color="{x:Static local:Theme+World+Highlight.SelectedColor}" />
   <SolidColorBrush x:Key="WorldHighlightExhaustedBrush" Color="{x:Static local:Theme+World+Highlight.ExhaustedColor}" />
   <SolidColorBrush x:Key="WorldHighlightHostileBrush" Color="{x:Static local:Theme+World+Highlight.HostileColor}" />
+  <SolidColorBrush x:Key="WorldHighlightRiotBrush" Color="{x:Static local:Theme+World+Highlight.RiotColor}" />
 
   <SolidColorBrush x:Key="WorldReachFillBrush" Color="{x:Static local:Theme+World+Reach.FillColor}" />
   <SolidColorBrush x:Key="WorldReachFeatherBrush" Color="{x:Static local:Theme+World+Reach.FeatherColor}" />
@@ -965,6 +966,8 @@
   <SolidColorBrush x:Key="WorldWaterSkyBrush" Color="{x:Static local:Theme+World+Water.SkyColor}" />
   <SolidColorBrush x:Key="WorldWaterFoamBrush" Color="{x:Static local:Theme+World+Water.FoamColor}" />
   <SolidColorBrush x:Key="WorldWaterSunBrush" Color="{x:Static local:Theme+World+Water.SunColor}" />
+  <SolidColorBrush x:Key="WorldMountainCloudLightBrush" Color="{x:Static local:Theme+World+MountainCloud.LightColor}" />
+  <SolidColorBrush x:Key="WorldMountainCloudShadowBrush" Color="{x:Static local:Theme+World+MountainCloud.ShadowColor}" />
 
   <SolidColorBrush x:Key="WorldRaceHumanBrush" Color="{x:Static local:Theme+World+Race.HumanColor}" />
   <SolidColorBrush x:Key="WorldRaceUndeadBrush" Color="{x:Static local:Theme+World+Race.UndeadColor}" />

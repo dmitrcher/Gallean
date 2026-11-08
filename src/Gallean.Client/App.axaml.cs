@@ -65,6 +65,10 @@ internal sealed class App(ILog log) : Application
         textCatalog.MakeCurrent();
 
         Task prepareTask = ClientPlatform.PrepareAsync is { } prepareAsync ? Task.Run(prepareAsync) : Task.CompletedTask;
+        ClientVersion clientVersion = ClientVersion.Get();
+        UpdateClient updateClient = cleanupList.Add(new UpdateClient(clientVersion, log));
+        Task<UpdateInfo?> latestUpdateTask = ClientPlatform.ChecksForUpdates ? Task.Run(updateClient.TryGetLatestAsync) : Task.FromResult<UpdateInfo?>(null);
+
         Task<AudioOutput> audioOutputTask = Task.Run(() => AudioOutput.CreateAsync(log));
         Task<AssetProvider> assetProviderTask = Task.Run(AssetProvider.LoadDefault);
         AudioOutput audioOutput = cleanupList.Add(await audioOutputTask);
@@ -73,10 +77,10 @@ internal sealed class App(ILog log) : Application
         CheckAssetPack(assetProvider);
         await prepareTask;
 
-        ClientVersion clientVersion = ClientVersion.Get();
         FreeThreadedRandomProvider random = new();
         GameLoader gameLoader = new(random);
         GameSaveStore gameSaveStore = new(AppDirectories.Saves, gameSettings.AutoSaveLimit);
+        LeaderStore leaderStore = new(AppDirectories.Leaders);
         AssetPreloader assetPreloader = new(assetProvider);
         AudioPlayer audioPlayer = new(assetProvider, audioOutput, log, gameSettings.SoundVolumeRatio, gameSettings.MusicVolumeRatio);
         GameViewModel gameViewModel = cleanupList.Add(new GameViewModel(
@@ -86,6 +90,7 @@ internal sealed class App(ILog log) : Application
             audioPlayer,
             gameLoader,
             gameSaveStore,
+            leaderStore,
             gameSettingsStore,
             gameSettings,
             clientVersion,
@@ -99,7 +104,17 @@ internal sealed class App(ILog log) : Application
         AudioScope.SetAudio(gameView, audioPlayer);
 
         currentGame = gameViewModel;
-        gameViewModel.ShowMainMenuCommand.Execute(null);
+        await gameViewModel.ShowMainMenuCommand.ExecuteAsync(null);
+
+        UpdateInfo? latestUpdate = await latestUpdateTask;
+
+        if (latestUpdate is not null && latestUpdate.Version > clientVersion)
+        {
+            if (gameViewModel.TopScreen is MainMenuScreenViewModel)
+            {
+                gameViewModel.OpenScreen(new UpdatePromptViewModel(latestUpdate, clientVersion));
+            }
+        }
     }
 
     private void Restart(IGameHost host)

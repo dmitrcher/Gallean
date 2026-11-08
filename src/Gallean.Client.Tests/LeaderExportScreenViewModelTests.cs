@@ -7,13 +7,13 @@ namespace Gallean.Client.Tests;
 
 public sealed class LeaderExportScreenViewModelTests
 {
-    private static IReadOnlyList<string> FormatLeaders(IReadOnlyList<LeaderExportCandidateViewModel> leaders)
+    private static IReadOnlyList<string> FormatLeaders(IReadOnlyList<LeaderExportLeaderViewModel> leaders)
     {
         List<string> rows = [];
 
-        foreach (LeaderExportCandidateViewModel leader in leaders)
+        foreach (LeaderExportLeaderViewModel leader in leaders)
         {
-            rows.Add($"{leader.StackId} {leader.Name} | {leader.Summary}");
+            rows.Add($"{leader.StackId} {leader.Name} {leader.LevelText} | {leader.BattlesWonText} | items={leader.ItemIcons.Count}");
         }
 
         return rows;
@@ -25,17 +25,29 @@ public sealed class LeaderExportScreenViewModelTests
 
         foreach (LeaderExportItemViewModel item in items)
         {
-            rows.Add($"{item.Items[0].DefinitionId} {item.Name} {item.AvailableText} {item.SelectedText} add={item.AddCommand.CanExecute(null)} remove={item.RemoveCommand.CanExecute(null)}");
+            rows.Add($"{item.Items[0].DefinitionId} {item.Name} | {item.CountText.Text} | {FormatPrice(item.Price)} | selected={item.Selected} add={item.AddCommand.CanExecute(null)} remove={item.RemoveCommand.CanExecute(null)}");
         }
 
         return rows;
+    }
+
+    private static string FormatPrice(OfferPriceViewModel price)
+    {
+        List<string> items = [];
+
+        foreach (OfferPriceItemViewModel item in price.Items)
+        {
+            items.Add($"{item.Resource.Value} {item.Resource.Name.ToLowerInvariant()}");
+        }
+
+        return string.Join(", ", items);
     }
 
     [Test]
     public async Task ExportTest()
     {
         GameLoader gameLoader = new(new RandomProvider(0));
-        ScenarioConfiguration configuration = new([new ScenarioPlayerConfiguration(WorldRace.Human, LordCategory.Warrior, new WorldObjectVariant(1), null)], WorldDifficulty.Hard, Leader: null);
+        ScenarioConfiguration configuration = new([new ScenarioPlayerConfiguration(WorldRace.Human, LordCategory.Warrior, new WorldObjectVariant(1), null, LeaderName: null)], WorldDifficulty.Hard, Leader: null);
         (GameSession session, IGameTextProvider texts) = gameLoader.CreateScenario("S107SC0000", configuration, Language.English);
         GameModel gameModel = new(session, texts, NullLog.Instance, SynchronousTaskScheduler.Instance);
         using GameViewModel gameViewModel = new TestGameViewModelBuilder().Build();
@@ -45,14 +57,14 @@ public sealed class LeaderExportScreenViewModelTests
 
         Assert.That(screen.Instruction, Is.EqualTo("Select a leader and up to 5 items to bring to the next quest."));
         Assert.That(FormatLeaders(screen.Leaders), Is.EqualTo([
-            "S107KC0000 Hatton | Level 1 · 0 battles won"
+            "S107KC0000 Hatton Lv. 1 | 0 battles won | items=0"
         ]));
         Assert.That(screen.SelectedLeader, Is.EqualTo(screen.Leaders[0]));
         Assert.That(FormatItems(screen.Items), Is.EqualTo([
-            "G000IG0001 Life Potion ×1 0 selected add=True remove=False",
-            "G000IG0006 Potion of Restoration ×3 0 selected add=True remove=False"
+            "G000IG0001 Life Potion | Available: 1 | 400 gold | selected=0 add=True remove=False",
+            "G000IG0006 Potion of Restoration | Available: 3 | 300 gold | selected=0 add=True remove=False"
         ]));
-        Assert.That(screen.SelectedItemsText.Text, Is.EqualTo("Selected items: 0 / 5"));
+        Assert.That(screen.ItemsTitle, Is.EqualTo("Items (0 / 5)"));
 
         screen.Items[1].AddCommand.Execute(null);
         screen.Items[1].AddCommand.Execute(null);
@@ -60,16 +72,16 @@ public sealed class LeaderExportScreenViewModelTests
         screen.Items[0].AddCommand.Execute(null);
 
         Assert.That(FormatItems(screen.Items), Is.EqualTo([
-            "G000IG0001 Life Potion ×1 1 selected add=False remove=True",
-            "G000IG0006 Potion of Restoration ×3 3 selected add=False remove=True"
+            "G000IG0001 Life Potion | Available: 1 | 400 gold | selected=1 add=False remove=True",
+            "G000IG0006 Potion of Restoration | Available: 3 | 300 gold | selected=3 add=False remove=True"
         ]));
-        Assert.That(screen.SelectedItemsText.Text, Is.EqualTo("Selected items: 4 / 5"));
+        Assert.That(screen.ItemsTitle, Is.EqualTo("Items (4 / 5)"));
 
         screen.Items[1].RemoveCommand.Execute(null);
 
         Assert.That(FormatItems(screen.Items), Is.EqualTo([
-            "G000IG0001 Life Potion ×1 1 selected add=False remove=True",
-            "G000IG0006 Potion of Restoration ×3 2 selected add=True remove=True"
+            "G000IG0001 Life Potion | Available: 1 | 400 gold | selected=1 add=False remove=True",
+            "G000IG0006 Potion of Restoration | Available: 3 | 300 gold | selected=2 add=True remove=True"
         ]));
 
         await screen.ExportCommand.ExecuteAsync(null);
@@ -102,9 +114,9 @@ public sealed class LeaderExportScreenViewModelTests
                 .Build(),
             MovementPoints: 20,
             new WorldInventory([
-                new WorldItem(new WorldItemId("S107IM0000"), new ItemDefinitionId("G000IG0006"), Charges: null),
-                new WorldItem(new WorldItemId("S107IM0001"), new ItemDefinitionId("G000IG0006"), Charges: null),
-                new WorldItem(new WorldItemId("S107IM0030"), new ItemDefinitionId("G000IG0001"), Charges: null)
+                new WorldItem(new WorldItemId("Exported1"), new ItemDefinitionId("G000IG0006"), Charges: null),
+                new WorldItem(new WorldItemId("Exported2"), new ItemDefinitionId("G000IG0006"), Charges: null),
+                new WorldItem(new WorldItemId("Exported3"), new ItemDefinitionId("G000IG0001"), Charges: null)
             ]),
             LeaderEquipment.Empty,
             new WorldSubraceId("S108SR0001"),
@@ -138,7 +150,7 @@ public sealed class LeaderExportScreenViewModelTests
     public async Task ExportAllItemsTest()
     {
         GameLoader gameLoader = new(new RandomProvider(0));
-        ScenarioConfiguration configuration = new([new ScenarioPlayerConfiguration(WorldRace.Human, LordCategory.Warrior, new WorldObjectVariant(1), null)], WorldDifficulty.Hard, Leader: null);
+        ScenarioConfiguration configuration = new([new ScenarioPlayerConfiguration(WorldRace.Human, LordCategory.Warrior, new WorldObjectVariant(1), null, LeaderName: null)], WorldDifficulty.Hard, Leader: null);
         (GameSession session, IGameTextProvider texts) = gameLoader.CreateScenario("S107SC0000", configuration, Language.English);
         GameModel gameModel = new(session, texts, NullLog.Instance, SynchronousTaskScheduler.Instance);
         using GameViewModel gameViewModel = new TestGameViewModelBuilder().Build();
@@ -151,7 +163,7 @@ public sealed class LeaderExportScreenViewModelTests
         screen.Items[1].AddCommand.Execute(null);
         screen.Items[0].AddCommand.Execute(null);
 
-        Assert.That(screen.SelectedItemsText.Text, Is.EqualTo("Selected items: 4 / 5"));
+        Assert.That(screen.ItemsTitle, Is.EqualTo("Items (4 / 5)"));
 
         await screen.ExportCommand.ExecuteAsync(null);
 

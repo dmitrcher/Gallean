@@ -21,10 +21,11 @@
         <local:BattleWorldTransitionShaderPrecompileVisual />
         <local:WorldBattleTransitionShaderPrecompileVisual />
         <local:WorldHighlightShaderPrecompileVisual />
+        <local:WorldMountainCloudShaderPrecompileVisual />
         <local:WorldReachShaderPrecompileVisual />
 
         <Panel Background="{TemplateBinding Background}" IsVisible="{Binding !PaintsOwnBackground}" />
-        <VisualLayerManager>
+        <VisualLayerManager x:Name="PART_VisualLayerManager">
           <local:UiScaleDecorator MinContentWidth="{TemplateBinding MinContentWidth}" MinContentHeight="{TemplateBinding MinContentHeight}">
             <Panel>
               <local:CursorVisual CursorType="{Binding TopScreen.CursorType}"
