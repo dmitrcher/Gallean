@@ -51,7 +51,7 @@ internal sealed partial class WorldEventQueue
                         this with { State = step.NewState },
                     WorldStackMovingEvent data when IsSameMove(data) =>
                         this with { State = step.NewState, Steps = AppendStep(data.TargetPosition, data.NewDirection) },
-                    WorldStackMovedEvent data when data.StackId == StackId && data.NewMovementPoints > 0 =>
+                    WorldStackMovedEvent data when data.StackId == StackId =>
                         this with { State = step.NewState },
                     WorldStackRelocatedEvent data when IsSameRelocate(data) =>
                         this with { State = step.NewState, Steps = AppendStep(data.TargetPosition, data.NewDirection) },
@@ -247,23 +247,6 @@ internal sealed partial class WorldEventQueue
             }
         }
 
-        public sealed record TerrainExpansion(
-            WorldState State,
-            WorldMap OldMap,
-            WorldPosition Position,
-            WorldPlayerId? PlayerId) : Animated(State)
-        {
-            public override WorldAnimationState CreateAnimation(IGameDefinitionProvider definitions, WorldVisibility visibility, GameSettings settings)
-            {
-                return new WorldAnimationState.TerrainExpansion(OldMap);
-            }
-
-            public override WorldEventFocus GetFocus()
-            {
-                return new WorldEventFocus(Position, PlayerId);
-            }
-        }
-
         public sealed record Unfog(
             WorldState State,
             WorldPosition Position,
@@ -431,26 +414,6 @@ internal sealed partial class WorldEventQueue
 
         public sealed record StackIdle(WorldState State, WorldStackId StackId) : Entry(State)
         {
-            public override WorldEventFocus? GetFocus()
-            {
-                return null;
-            }
-        }
-
-        public sealed record StackExhaust(WorldState State, WorldStackId StackId) : Entry(State)
-        {
-            public override Entry? TryExtend(EngineStep<WorldState, WorldEvent> step)
-            {
-                return step.Event switch
-                {
-                    WorldStackBattleStartedEvent data when data.AttackerStackId == StackId =>
-                        new Battle(step.NewState, data.AttackerStackId, data.Position),
-                    WorldFortificationBattleStartedEvent data when data.AttackerStackId == StackId =>
-                        new Battle(step.NewState, data.AttackerStackId, data.Position),
-                    _ => null
-                };
-            }
-
             public override WorldEventFocus? GetFocus()
             {
                 return null;

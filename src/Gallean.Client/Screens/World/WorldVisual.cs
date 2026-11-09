@@ -27,6 +27,7 @@ internal sealed partial class WorldVisual : AbstractAnimatedVisual
     private readonly AnimationClock animationClock = new();
     private readonly PlaybackClock playbackClock = new();
     private readonly AnimationPlayback<WorldRenderState.WorldAnimation> animationPlayback = new();
+    private readonly AnimationPlayback<WorldRenderState.TerrainExpansionAnimation> terrainExpansionPlayback = new();
     private readonly HashSet<Key> pressedKeys = [];
     private readonly WorldRenderer renderer = new();
     private readonly ScrollHelper scrollHelper = new();
@@ -203,7 +204,7 @@ internal sealed partial class WorldVisual : AbstractAnimatedVisual
             (Key.Tab or Key.N, KeyModifiers.None) => [ViewModel.SelectNextStackCommand],
             (Key.T, KeyModifiers.None) => [ViewModel.InspectStackCommand],
             (Key.Space, KeyModifiers.None) => [ViewModel.FastForwardCommand],
-            (Key.Enter, KeyModifiers.None) => [ViewModel.FastForwardCommand, ViewModel.FinishStackCommand],
+            (Key.Enter, KeyModifiers.None) => [ViewModel.FastForwardCommand, ViewModel.FinishStackCommand, ViewModel.SelectNextStackCommand],
             (Key.Enter, KeyModifiers.Control) => [ViewModel.EndTurnCommand],
             (Key.E, KeyModifiers.None) => [ViewModel.EndTurnCommand],
             (Key.C, KeyModifiers.None) => [ViewModel.OpenCapitalCommand],
@@ -284,7 +285,14 @@ internal sealed partial class WorldVisual : AbstractAnimatedVisual
 
         if (point.Properties.IsRightButtonPressed)
         {
-            ViewModel.ShowPositionInfo(WorldTransform.FromWorldPoint(worldPoint), hitPosition);
+            if (ViewModel.CancelSelectedActionCommand.CanExecute(null))
+            {
+                ViewModel.CancelSelectedActionCommand.Execute(null);
+            }
+            else
+            {
+                ViewModel.ShowPositionInfo(WorldTransform.FromWorldPoint(worldPoint), hitPosition);
+            }
 
             e.Handled = true;
         }
@@ -500,7 +508,7 @@ internal sealed partial class WorldVisual : AbstractAnimatedVisual
                 }
             }
 
-            if (animationPlayback.IsPlaying)
+            if (animationPlayback.IsPlaying || terrainExpansionPlayback.IsPlaying)
             {
                 redraw = true;
             }
@@ -626,6 +634,7 @@ internal sealed partial class WorldVisual : AbstractAnimatedVisual
         RegisterAnimation(snapshot, playbackTime);
 
         TimeSpan animationTime = animationPlayback.GetElapsed(playbackTime);
+        TimeSpan terrainExpansionTime = terrainExpansionPlayback.GetElapsed(playbackTime);
         Matrix view = camera.GetViewMatrix();
         GameSettings settings = SettingsScope.GetSettings(this);
 
@@ -638,6 +647,7 @@ internal sealed partial class WorldVisual : AbstractAnimatedVisual
             Assets,
             loopTime,
             animationTime,
+            terrainExpansionTime,
             settings.RenderResolutionRatio,
             IsHitboxOverlayVisible,
             Diagnostics));
@@ -646,6 +656,12 @@ internal sealed partial class WorldVisual : AbstractAnimatedVisual
     private void RegisterAnimation(WorldScreenSnapshot? snapshot, TimeSpan now)
     {
         WorldRenderState.WorldAnimation? animation = snapshot?.WorldState.Animation;
+        WorldRenderState.TerrainExpansionAnimation? terrainExpansion = snapshot?.WorldState.TerrainExpansion;
+
+        if (terrainExpansionPlayback.Register(terrainExpansion, now) && terrainExpansion is not null)
+        {
+            Audio.PlaySound(terrainExpansion.SoundKey);
+        }
 
         if (animation is not null &&
             animationPlayback.Current is not null &&

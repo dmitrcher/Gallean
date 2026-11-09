@@ -51,13 +51,6 @@ internal sealed partial class WorldScreenViewModel
             return Empty.Value;
         }
 
-        Empty IWorldEventActionVisitor<Empty>.Visit(WorldEventAction.StackExhaust action)
-        {
-            parent.OnActionStackExhaust(action);
-
-            return Empty.Value;
-        }
-
         Empty IWorldEventActionVisitor<Empty>.Visit(WorldEventAction.Animation action)
         {
             ActiveAnimation = action.State;
@@ -176,12 +169,12 @@ internal sealed partial class WorldScreenViewModel
 
         AbstractScreenViewModel IWorldEventScreenVisitor<AbstractScreenViewModel>.Visit(WorldEventAction.ThiefActionMineResult action)
         {
-            return ThiefActionResultScreenViewModel.CreateMineResult(action.Type, action.IsSuccess);
+            return ThiefActionResultScreenViewModel.CreateMineResult(action.Type, action.ActionName, action.IsSuccess);
         }
 
         AbstractScreenViewModel IWorldEventScreenVisitor<AbstractScreenViewModel>.Visit(WorldEventAction.ThiefActionTheirResult action)
         {
-            return ThiefActionResultScreenViewModel.CreateTheirResult(action.Type, action.Target, action.IsSuccess, action.TheirLordName);
+            return ThiefActionResultScreenViewModel.CreateTheirResult(action.Type, action.ActionName, action.Target, action.IsSuccess, action.TheirLordName);
         }
 
         AbstractScreenViewModel IWorldEventScreenVisitor<AbstractScreenViewModel>.Visit(WorldEventAction.SiteEnter action)
