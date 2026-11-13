@@ -25,7 +25,9 @@ internal sealed class TextureBuffer(int width, int height)
     public unsafe WriteableBitmap ToOpaqueBitmap()
     {
         WriteableBitmap bitmap = new(
-            new PixelSize(width, height),
+            // Layout can briefly arrange controls at zero size (for example while a mobile app is in the background),
+            // and a bitmap needs at least one pixel.
+            new PixelSize(Math.Max(width, 1), Math.Max(height, 1)),
             new Vector(96, 96),
             PixelFormat.Bgra8888,
             AlphaFormat.Opaque);
@@ -59,7 +61,9 @@ internal sealed class TextureBuffer(int width, int height)
     public unsafe WriteableBitmap ToPremultipliedBitmap()
     {
         WriteableBitmap bitmap = new(
-            new PixelSize(width, height),
+            // Layout can briefly arrange controls at zero size (for example while a mobile app is in the background),
+            // and a bitmap needs at least one pixel.
+            new PixelSize(Math.Max(width, 1), Math.Max(height, 1)),
             new Vector(96, 96),
             PixelFormat.Bgra8888,
             AlphaFormat.Premul);

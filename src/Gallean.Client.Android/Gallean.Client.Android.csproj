@@ -1,0 +1,64 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net11.0-android</TargetFramework>
+    <SupportedOSPlatformVersion>26</SupportedOSPlatformVersion>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>Gallean</AssemblyName>
+    <RootNamespace>Gallean.Client.Android</RootNamespace>
+    <ApplicationId>org.gallean.client</ApplicationId>
+    <ApplicationTitle>Gallean</ApplicationTitle>
+    <!-- Android version code from the game version: 0.13.0 becomes 1300, so every release installs over the last one. -->
+    <ApplicationVersion>$([MSBuild]::Add($([MSBuild]::Add($([MSBuild]::Multiply($([System.Version]::Parse($(VersionPrefix)).Major), 1000000)), $([MSBuild]::Multiply($([System.Version]::Parse($(VersionPrefix)).Minor), 100)))), $([System.Version]::Parse($(VersionPrefix)).Build)))</ApplicationVersion>
+    <ApplicationDisplayVersion>$(VersionPrefix)</ApplicationDisplayVersion>
+    <AndroidPackageFormat>apk</AndroidPackageFormat>
+    <RuntimeIdentifiers>android-arm64;android-x64</RuntimeIdentifiers>
+    <!-- .NET 11 runs Android apps on CoreCLR. -->
+    <!-- A standalone APK that can be sideloaded, also in Debug. -->
+    <EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
+    <!-- The shared client is trimmed and AOT-compiled on desktop too, so Release builds trim it the same way. -->
+    <PublishTrimmed Condition="'$(Configuration)' == 'Release'">true</PublishTrimmed>
+    <IsPublishable>true</IsPublishable>
+    <!--
+      Resource lookups for runtime error messages need the current culture. On devices with a locale .NET cannot
+      parse, that recursion aborts the process in Debug; Release trimming already uses resource keys.
+    -->
+    <UseSystemResourceKeys>true</UseSystemResourceKeys>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The shared client is RID-neutral; building it once avoids parallel per-RID builds racing on its output. -->
+    <ProjectReference Include="..\Gallean.Client\Gallean.Client.csproj" GlobalPropertiesToRemove="RuntimeIdentifier;SelfContained" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Android" />
+  </ItemGroup>
+
+  <!--
+    The game data is thousands of small files that the shared code reads from the file system.
+    Android cannot ship loose files, so they go into the APK as one archive that the app unpacks on first launch.
+  -->
+  <PropertyGroup>
+    <GameDataDirectory>$(MSBuildThisFileDirectory)..\Gallean.Entities.GameData\RiseOfTheElves</GameDataDirectory>
+    <GameDataArchive>$(MSBuildThisFileDirectory)obj\GameData\RiseOfTheElves.zip</GameDataArchive>
+    <AndroidStoreUncompressedFileExtensions>$(AndroidStoreUncompressedFileExtensions);.zip</AndroidStoreUncompressedFileExtensions>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <GameDataFile Include="$(GameDataDirectory)\**\*.*" />
+  </ItemGroup>
+
+  <Target Name="PackGameData"
+          BeforeTargets="_ComputeAndroidAssetsPaths;UpdateAndroidAssets;PrepareForBuild"
+          Inputs="@(GameDataFile)"
+          Outputs="$(GameDataArchive)">
+    <MakeDir Directories="$([System.IO.Path]::GetDirectoryName($(GameDataArchive)))" />
+    <ZipDirectory SourceDirectory="$(GameDataDirectory)" DestinationFile="$(GameDataArchive)" Overwrite="true" />
+  </Target>
+
+  <ItemGroup>
+    <AndroidAsset Include="$(GameDataArchive)" Link="Assets\RiseOfTheElves.zip" />
+  </ItemGroup>
+
+</Project>

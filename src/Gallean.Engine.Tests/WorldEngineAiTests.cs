@@ -3984,7 +3984,67 @@ public sealed class WorldEngineAiTests
 
         TestWorldAiRunner runner = new(session, engine);
 
-        Assert.That(TestWorldAiTraceFormatter.Format(runner.PlayTurn()), Is.EqualTo(["[P2 192] Move Summon -> (3, 3) (Defender wins)"]));
+        Assert.That(TestWorldAiTraceFormatter.Format(runner.PlayTurn()), Is.EqualTo(["[P2 19] Move Summon -> (3, 3) (Defender wins)"]));
+    }
+
+    [Test]
+    public void SummonNeutralCityTargetTest()
+    {
+        WorldMap map = TestHelpers.SimpleMap(8, 6);
+
+        UnitDefinition summon = Leader("summon", damage: 50, movementPoints: 6) with
+        {
+            Category = UnitCategory.Summon,
+            Lifetime = 2
+        };
+        UnitDefinition party = TestHelpers.SimpleLeaderDefinition(
+            TestHelpers.SimpleUnitDefinition("party", maxHitpoints: 500, initiative: 60, damage: 100),
+            movementPoints: 6, leadership: 6);
+        UnitDefinition guard = TestHelpers.SimpleUnitDefinition("guard", maxHitpoints: 300, initiative: 40, damage: 60);
+        WorldCityDefinition cityDefinition = TestHelpers.SimpleCityDefinition(
+            new WorldCityDefinitionId(WorldRace.Neutral, 1), WorldResourceSet.Empty);
+
+        WorldPlayer player1 = TestHelpers.SimplePlayer(new WorldPlayerId(1), WorldRace.Dwarf, map);
+        WorldPlayer player2 = TestHelpers.SimplePlayer(new WorldPlayerId(2), WorldRace.Heretic, map);
+        WorldPlayer neutral = TestHelpers.SimplePlayer(new WorldPlayerId(3), WorldRace.Neutral, map);
+
+        WorldStack summonStack1 = MyStack(new WorldUnitId("summonLeader1"), "Summon1", player1.Id, new WorldPosition(5, 5), summon, 100, 6, WorldStackOrder.Normal.Instance);
+        WorldStack summonStack2 = MyStack(new WorldUnitId("summonLeader2"), "Summon2", player1.Id, new WorldPosition(4, 3), summon, 100, 6, WorldStackOrder.Normal.Instance);
+        WorldStack partyStack = EnemyStack(new WorldUnitId("partyUnit"), "Party", player2.Id, new WorldPosition(6, 3), party, 500);
+
+        WorldCity city = TestHelpers.SimpleCity(
+            new WorldFortificationId("City"),
+            cityDefinition,
+            neutral.Id,
+            new WorldPosition(3, 4),
+            new UnitGrid<WorldUnit>.Builder()
+                .Place(TestHelpers.SimpleUnit(new WorldUnitId("guard"), guard), GridPosition.FrontBottom, false)
+                .Build());
+
+        (GameSession session, IEngineContext engine) = new TestWorldEngineBuilder()
+            .WithMap(map)
+            .WithDefinition(summon)
+            .WithDefinition(party)
+            .WithDefinition(guard)
+            .WithDefinition(cityDefinition)
+            .WithDefinition(TestHelpers.SimpleLord(player1.LordId, player1.Race, LordCategory.Warrior))
+            .WithPlayer(player1)
+            .WithDefinition(TestHelpers.SimpleLord(player2.LordId, player2.Race, LordCategory.Warrior))
+            .WithPlayer(player2)
+            .WithDefinition(TestHelpers.SimpleLord(neutral.LordId, neutral.Race, LordCategory.Warrior))
+            .WithPlayer(neutral)
+            .WithStack(summonStack1)
+            .WithStack(summonStack2)
+            .WithStack(partyStack)
+            .WithCity(city)
+            .BuildSession();
+
+        TestWorldAiRunner runner = new(session, engine);
+
+        Assert.That(TestWorldAiTraceFormatter.Format(runner.PlayTurn()), Is.EqualTo([
+            "[P2 154] Move Summon1 -> (6, 3) (Defender wins)",
+            "[P2 154] Move Summon2 -> (6, 3) (Defender wins)"
+        ]));
     }
 
     [Test]
@@ -4771,5 +4831,48 @@ public sealed class WorldEngineAiTests
 
         Assert.That(TestWorldAiTraceFormatter.Format(runner.PlayTurn()), Is.Empty);
         Assert.That(session.World.State.Stacks[enemyStack.Id], Is.EqualTo(enemyStack with { MovementPoints = 6 }));
+    }
+
+    [Test]
+    public void EndingZoneTest()
+    {
+        WorldMap map = TestHelpers.BuildMap(["........."]);
+
+        UnitDefinition main = Leader("main", damage: 50, movementPoints: 6);
+
+        WorldPlayer player1 = TestHelpers.SimplePlayer(new WorldPlayerId(1), WorldRace.Undead, map) with
+        {
+            FogOfWar = TestHelpers.BuildFogOfWar(["?.......?"])
+        };
+        WorldPlayer player2 = TestHelpers.SimplePlayer(new WorldPlayerId(2), WorldRace.Heretic, map);
+
+        WorldStack mainStack = MyStack(new WorldUnitId("mainLeader"), "Main", player1.Id, new WorldPosition(5, 0), main, 100, 6, WorldStackOrder.Normal.Instance);
+
+        ScenarioLocationDefinition zone = new(new ScenarioLocationId("Zone"), new ScenarioTextId("Zone"), new WorldPosition(7, 0), 0);
+
+        (GameSession session, IEngineContext engine) = new TestWorldEngineBuilder()
+            .WithMap(map)
+            .WithDefinition(main)
+            .WithDefinition(TestHelpers.SimpleLord(player1.LordId, player1.Race, LordCategory.Warrior))
+            .WithPlayer(player1)
+            .WithDefinition(TestHelpers.SimpleLord(player2.LordId, player2.Race, LordCategory.Warrior))
+            .WithPlayer(player2)
+            .WithStack(mainStack)
+            .WithScenarioLocation(zone)
+            .WithScenarioEvent(new ScenarioEventDefinition(
+                new ScenarioEventId("Defeat"),
+                [WorldRace.Undead],
+                [],
+                [new ScenarioEventEnteringZoneCondition(zone.Id)],
+                [new ScenarioEventWinEffect(WinnerId: null)],
+                Enabled: true,
+                OccurOnce: true,
+                Chance: 100,
+                Order: 0))
+            .BuildSession();
+
+        TestWorldAiRunner runner = new(session, engine);
+
+        Assert.That(TestWorldAiTraceFormatter.Format(runner.PlayTurn()), Is.EqualTo(["[P1 1000] Move Main -> (2, 0)"]));
     }
 }

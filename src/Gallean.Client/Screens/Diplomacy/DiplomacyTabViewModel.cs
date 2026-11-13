@@ -1,7 +1,6 @@
 using System.Collections.Immutable;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Gallean.Common;
 using Gallean.Engine;
 
 namespace Gallean.Client;
@@ -191,15 +190,15 @@ internal sealed partial class DiplomacyTabViewModel : ManagementTabViewModel
 
     private async Task ProposeAsync(DiplomacyPlayerViewModel player, WorldDiplomacyProposalAction action)
     {
-        ICommandResult<WorldCommandError, WorldEvent, Empty>? result =
-            await DispatchWorldActionAsync(new WorldDiplomacyActionCommand(player.PlayerId, action));
+        WorldDiplomacyActionCommand command = new(player.PlayerId, action);
+        WorldCommandResult? commandResult = await DispatchWorldActionAsync(command);
 
-        if (result is null)
+        if (commandResult is null)
         {
             return;
         }
 
-        WorldDiplomacyProposalAnsweredEvent? answered = result.Events.OfType<WorldDiplomacyProposalAnsweredEvent>().FirstOrDefault();
+        WorldDiplomacyProposalAnsweredEvent? answered = commandResult.Events.OfType<WorldDiplomacyProposalAnsweredEvent>().FirstOrDefault();
 
         if (answered is not null)
         {

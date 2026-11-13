@@ -17,18 +17,17 @@ internal sealed partial class CityTabViewModel
     }
 
     private readonly WorldFortificationId fortificationId;
-    private readonly ManagementScreenViewModel screen;
     private readonly UnitGridSelectionViewModel unitSelection;
     private WorldFortification? fortification;
     private WorldStack? visitingStack;
-    private WorldGetCityInfoCommand.Result cityInfo = new(Growth: null, HealError: null);
+    private WorldGetCityInfoCommand.Result cityInfo = new(Growth: null, HealError: null, ArmorBonus: 0, Regeneration: 0);
     private WorldGetStackInfoCommand.Result stackInfo = new([], OccupiedLeadership: 0, TotalLeadership: 0);
     private WorldGetGarrisonInfoCommand.Result garrisonInfo = new([], OccupiedCapacity: 0, TotalCapacity: 0);
 
     public CityTabViewModel(GameModel gameModel, GameViewModel gameViewModel, ManagementScreenViewModel screen, WorldFortificationId fortificationId)
         : base(gameModel, gameViewModel)
     {
-        this.screen = screen;
+        Screen = screen;
         this.fortificationId = fortificationId;
 
         unitSelection = new UnitGridSelectionViewModel(gameModel, this);
@@ -53,6 +52,7 @@ internal sealed partial class CityTabViewModel
 
     public override string TabHeader => Tr("City");
 
+    public ManagementScreenViewModel Screen { get; }
     public UnitGridViewModel StackGrid { get; }
     public UnitGridViewModel GarrisonGrid { get; }
     public InventoryTransferViewModel InventoryTransfer { get; }
@@ -87,6 +87,9 @@ internal sealed partial class CityTabViewModel
     public partial TextSpans GarrisonSummary { get; private set; } = TextSpans.Empty;
 
     [ObservableProperty]
+    public partial IReadOnlyList<StatRowViewModel> CityStats { get; private set; } = [];
+
+    [ObservableProperty]
     public partial AssetSpriteKey? CityImageKey { get; private set; }
 
     [ObservableProperty]
@@ -100,6 +103,9 @@ internal sealed partial class CityTabViewModel
 
     [ObservableProperty]
     public partial UnitActionType? TargetedAction { get; private set; }
+
+    [ObservableProperty]
+    public partial string? TargetingPromptText { get; private set; }
 
     [ObservableProperty]
     public partial IReadOnlyDictionary<WorldUnitId, ResourceSetViewModel> TargetPrices { get; private set; } = new Dictionary<WorldUnitId, ResourceSetViewModel>();
@@ -228,7 +234,11 @@ internal sealed partial class CityTabViewModel
 
     async Task IUnitGridSelectionProvider.InvokeEmptySlotAsync(UnitGridSlotReference target)
     {
-        if (GetGridType(target.Grid) == CityUnitGridType.Garrison && fortification is not null)
+        if (TargetedAction is not null)
+        {
+            CancelTargeting();
+        }
+        else if (GetGridType(target.Grid) == CityUnitGridType.Garrison && fortification is not null)
         {
             Game.OpenScreen(new UnitPurchaseViewModel(GameModel, Game, fortificationId, target.Position));
         }
@@ -332,7 +342,7 @@ internal sealed partial class CityTabViewModel
 
             if (await TryDispatchWorldActionAsync(command))
             {
-                screen.Close();
+                Screen.Close();
             }
         }
     }
@@ -442,6 +452,16 @@ internal sealed partial class CityTabViewModel
             TargetedAction = null;
             RefreshView();
         }
+    }
+
+    private static string FormatTargetingPrompt(UnitActionType type)
+    {
+        return type switch
+        {
+            UnitActionType.Heal => Tr("Select a unit to heal it."),
+            UnitActionType.Resurrect => Tr("Select a unit to resurrect it."),
+            UnitActionType.LockType => Tr("Select a unit to lock its type.")
+        };
     }
 
     private bool HasActionTarget(UnitActionType type)
@@ -877,7 +897,7 @@ internal sealed partial class CityTabViewModel
         if (fortification is null)
         {
             visitingStack = null;
-            screen.Close();
+            Screen.Close();
 
             return;
         }
@@ -917,9 +937,19 @@ internal sealed partial class CityTabViewModel
         GarrisonGrid.Update(garrison, showsPurchaseHints: true, BuildUnitHighlight(GarrisonGrid, garrison, dragged));
         TargetPrices = BuildTargetPrices(dragged);
 
+        if (TargetedAction is not null)
+        {
+            TargetingPromptText = FormatTargetingPrompt(TargetedAction.Value);
+        }
+        else
+        {
+            TargetingPromptText = null;
+        }
+
         CityTitle = GameModel.Texts.GetScenarioText(fortification.NameTextId);
         CitySummary = FormatCitySummary(fortification);
-        GarrisonSummary = FormatGarrisonSummary(garrison);
+        GarrisonSummary = FormatGarrisonSummary(garrisonInfo);
+        CityStats = BuildCityStats(cityInfo);
         CityImageKey = ResolveCityImageKey(fortification);
         CapitalScene = BuildCapitalScene(fortification);
         UpgradeLabel = FormatUpgradeLabel(cityInfo.Growth);
@@ -955,7 +985,7 @@ internal sealed partial class CityTabViewModel
             if (await TryDispatchWorldActionAsync(new WorldUseItemCommand(visitingStack.Id, item.Id, Target: null)))
             {
                 Game.PlaySound(ItemSoundResolver.ResolveWorld(definition.Category));
-                screen.Close();
+                Screen.Close();
             }
             else
             {
@@ -964,7 +994,7 @@ internal sealed partial class CityTabViewModel
         }
         else if (Game.RootScreen is WorldScreenViewModel world)
         {
-            screen.Close();
+            Screen.Close();
             world.SelectAction(new WorldCursorAction.UseItem(visitingStack.Id, item.Id));
         }
     }
@@ -1022,9 +1052,18 @@ internal sealed partial class CityTabViewModel
         }
     }
 
-    private static TextSpans FormatGarrisonSummary(UnitGrid<WorldUnit> garrison)
+    private static TextSpans FormatGarrisonSummary(WorldGetGarrisonInfoCommand.Result info)
     {
-        return TrSpans("Units in city: {0:*}", garrison.GetUnits().Count());
+        return TrSpans("Garrison: {0:*} / {1:*}", info.OccupiedCapacity, info.TotalCapacity);
+    }
+
+    private static IReadOnlyList<StatRowViewModel> BuildCityStats(WorldGetCityInfoCommand.Result info)
+    {
+        return
+        [
+            new StatRowViewModel(IconMoniker.Armor, Tr("Armor"), new StatValueViewModel(TextSpans.FromText($"{info.ArmorBonus:+0;-0;0}"), 0), null),
+            new StatRowViewModel(IconMoniker.Heal, Tr("Regeneration"), new StatValueViewModel(TextSpans.FromText(Tr("{0}%", info.Regeneration)), 0), null)
+        ];
     }
 
     private WorldGetCityInfoCommand.Result ResolveCityInfo()
@@ -1034,7 +1073,7 @@ internal sealed partial class CityTabViewModel
 
         if (result.Failed)
         {
-            return new WorldGetCityInfoCommand.Result(Growth: null, HealError: null);
+            return new WorldGetCityInfoCommand.Result(Growth: null, HealError: null, ArmorBonus: 0, Regeneration: 0);
         }
         else
         {

@@ -33,6 +33,7 @@ internal sealed partial class WorldRenderer
         IAssetProvider assets,
         TimeSpan loopTime,
         TimeSpan animationTime,
+        TimeSpan terrainExpansionTime,
         float renderResolution,
         bool hitboxOverlay)
     {
@@ -40,11 +41,11 @@ internal sealed partial class WorldRenderer
 
         if (transition is not null)
         {
-            RenderBattleTransition(canvas, content, state, transition, assets, loopTime, animationTime, renderResolution, hitboxOverlay);
+            RenderBattleTransition(canvas, content, state, transition, assets, loopTime, animationTime, terrainExpansionTime, renderResolution, hitboxOverlay);
         }
         else
         {
-            RenderScene(canvas, content, state, assets, loopTime, animationTime, hitboxOverlay);
+            RenderScene(canvas, content, state, assets, loopTime, animationTime, terrainExpansionTime, hitboxOverlay);
         }
     }
 
@@ -56,6 +57,7 @@ internal sealed partial class WorldRenderer
         IAssetProvider assets,
         TimeSpan loopTime,
         TimeSpan animationTime,
+        TimeSpan terrainExpansionTime,
         float renderResolution,
         bool hitboxOverlay)
     {
@@ -74,7 +76,7 @@ internal sealed partial class WorldRenderer
 
         using ScaledSurface surface = ScaledSurface.Create(canvas, renderResolution, lens);
 
-        RenderScene(surface.Canvas, content, state, assets, loopTime, animationTime, hitboxOverlay);
+        RenderScene(surface.Canvas, content, state, assets, loopTime, animationTime, terrainExpansionTime, hitboxOverlay);
 
         using SKShader image = surface.ToShader();
         using WorldBattleTransitionShaderProgram.Editor editor = content.BattleTransitionShaderProgram.Edit();
@@ -131,14 +133,15 @@ internal sealed partial class WorldRenderer
         IAssetProvider assets,
         TimeSpan loopTime,
         TimeSpan animationTime,
+        TimeSpan terrainExpansionTime,
         bool hitboxOverlay)
     {
         Rect visible = GetVisibleRect(canvas);
         int frameIndex = AnimationRate.Sprites.GetFrameIndex(loopTime);
-        IReadOnlyList<AnimationRenderItem> animations = BuildAnimationRenderItems(state, loopTime, animationTime);
+        IReadOnlyList<AnimationRenderItem> animations = BuildAnimationRenderItems(state, loopTime, animationTime, terrainExpansionTime);
 
         DrawBackdrop(canvas, content, visible);
-        DrawTerrain(canvas, content, frameIndex, loopTime, animationTime, visible);
+        DrawTerrain(canvas, content, frameIndex, loopTime, terrainExpansionTime, visible);
         DrawReach(canvas, content);
 
         foreach (ObjectiveMarker marker in state.ObjectiveMarkers)
@@ -146,7 +149,7 @@ internal sealed partial class WorldRenderer
             DrawObjectiveMarker(canvas, marker, visible);
         }
 
-        DrawObjects(canvas, content, animations, assets, frameIndex, visible);
+        DrawObjects(canvas, content, animations, assets, frameIndex, loopTime, visible);
 
         foreach (Cursor cursor in state.Cursors)
         {
@@ -170,7 +173,7 @@ internal sealed partial class WorldRenderer
         }
     }
 
-    private static void DrawTerrain(SKCanvas canvas, WorldRenderContent content, int frameIndex, TimeSpan loopTime, TimeSpan animationTime, Rect visible)
+    private static void DrawTerrain(SKCanvas canvas, WorldRenderContent content, int frameIndex, TimeSpan loopTime, TimeSpan terrainExpansionTime, Rect visible)
     {
         using SKPaint terrainPaint = SkiaHelpers.MakeImagePaint();
 
@@ -195,10 +198,10 @@ internal sealed partial class WorldRenderer
         content.RoadAtlas.Draw(canvas, terrainPaint, visible);
 
         if (content.TerrainExpansion is not null &&
-            animationTime < content.TerrainExpansion.Duration &&
+            terrainExpansionTime < content.TerrainExpansion.Duration &&
             visible.Intersects(content.TerrainExpansion.Bounds))
         {
-            DrawTerrainExpansion(canvas, content, content.TerrainExpansion, terrainPaint, frameIndex, loopTime, animationTime, visible);
+            DrawTerrainExpansion(canvas, content, content.TerrainExpansion, terrainPaint, frameIndex, loopTime, terrainExpansionTime, visible);
         }
 
         canvas.Restore();
@@ -211,7 +214,7 @@ internal sealed partial class WorldRenderer
         SKPaint terrainPaint,
         int frameIndex,
         TimeSpan loopTime,
-        TimeSpan animationTime,
+        TimeSpan terrainExpansionTime,
         Rect visible)
     {
         using SKColorFilter filter = MakeColorFilter();
@@ -243,7 +246,7 @@ internal sealed partial class WorldRenderer
         SKColorFilter MakeColorFilter()
         {
             float scale = (float)(terrainExpansion.Duration / terrainExpansion.Fade);
-            float offset = (float)((terrainExpansion.Fade - animationTime) / terrainExpansion.Fade);
+            float offset = (float)((terrainExpansion.Fade - terrainExpansionTime) / terrainExpansion.Fade);
 
             return SKColorFilter.CreateColorMatrix(
             [
@@ -261,6 +264,7 @@ internal sealed partial class WorldRenderer
         IReadOnlyList<AnimationRenderItem> animations,
         IAssetProvider assets,
         int frameIndex,
+        TimeSpan loopTime,
         Rect visible)
     {
         using SKPaint atlasPaint = SkiaHelpers.MakeImagePaint();
@@ -271,23 +275,27 @@ internal sealed partial class WorldRenderer
         int objectCount = content.ObjectAtlas.SpriteCount;
         IReadOnlyList<int> objectDepths = content.ObjectSpriteDepths;
         IReadOnlyList<DirectSprite> directSprites = content.DirectSprites;
+        IReadOnlyList<MountainCloudSprite> clouds = content.MountainClouds;
         IReadOnlyList<StackSprite> stacks = content.Stacks;
         int directCount = directSprites.Count;
+        int cloudCount = clouds.Count;
         int stackCount = stacks.Count;
         int animationCount = animations.Count;
 
         int objectCursor = 0;
         int directCursor = 0;
+        int cloudCursor = 0;
         int stackCursor = 0;
         int animationCursor = 0;
 
-        while (objectCursor < objectCount || directCursor < directCount || stackCursor < stackCount || animationCursor < animationCount)
+        while (objectCursor < objectCount || directCursor < directCount || cloudCursor < cloudCount || stackCursor < stackCount || animationCursor < animationCount)
         {
             int objectDepth = objectCursor < objectCount ? objectDepths[objectCursor] : int.MaxValue;
             int directDepth = directCursor < directCount ? directSprites[directCursor].Depth : int.MaxValue;
+            int cloudDepth = cloudCursor < cloudCount ? clouds[cloudCursor].Depth : int.MaxValue;
             int stackDepth = stackCursor < stackCount ? stacks[stackCursor].Stack.Depth : int.MaxValue;
             int animationDepth = animationCursor < animationCount ? animations[animationCursor].Depth : int.MaxValue;
-            int limit = Math.Min(directDepth, Math.Min(stackDepth, animationDepth));
+            int limit = Math.Min(Math.Min(directDepth, cloudDepth), Math.Min(stackDepth, animationDepth));
 
             if (objectDepth <= limit)
             {
@@ -300,7 +308,7 @@ internal sealed partial class WorldRenderer
 
                 content.ObjectAtlas.DrawRange(canvas, atlasPaint, visible, start, objectCursor - start);
             }
-            else if (directDepth <= Math.Min(stackDepth, animationDepth))
+            else if (directDepth <= Math.Min(cloudDepth, Math.Min(stackDepth, animationDepth)))
             {
                 DirectSprite sprite = directSprites[directCursor];
 
@@ -311,6 +319,17 @@ internal sealed partial class WorldRenderer
                 }
 
                 directCursor++;
+            }
+            else if (cloudDepth <= Math.Min(stackDepth, animationDepth))
+            {
+                MountainCloudSprite cloud = clouds[cloudCursor];
+
+                if (visible.Intersects(cloud.Bounds))
+                {
+                    MountainClouds.Draw(canvas, content.MountainCloudShaderProgram, cloud, loopTime);
+                }
+
+                cloudCursor++;
             }
             else if (stackDepth <= animationDepth)
             {
@@ -388,7 +407,11 @@ internal sealed partial class WorldRenderer
         canvas.Restore();
     }
 
-    private static IReadOnlyList<AnimationRenderItem> BuildAnimationRenderItems(WorldRenderState state, TimeSpan loopTime, TimeSpan animationTime)
+    private static IReadOnlyList<AnimationRenderItem> BuildAnimationRenderItems(
+        WorldRenderState state,
+        TimeSpan loopTime,
+        TimeSpan animationTime,
+        TimeSpan terrainExpansionTime)
     {
         List<AnimationRenderItem> items = [];
 
@@ -397,6 +420,19 @@ internal sealed partial class WorldRenderer
             IReadOnlyList<AnimationRenderItem> animations = state.Animation.Accept(new AnimationRenderItemVisitor(), animationTime);
 
             items.AddRange(animations);
+        }
+
+        if (state.TerrainExpansion is not null)
+        {
+            foreach (TerrainExpansionTree tree in state.TerrainExpansion.Trees)
+            {
+                double opacity = 1 - terrainExpansionTime.ToAnimationProgress(tree.Start, state.TerrainExpansion.Fade);
+
+                if (opacity > 0)
+                {
+                    items.Add(new AnimationRenderItem.TileFeature(tree.AssetKey, tree.Position, opacity, tree.Depth));
+                }
+            }
         }
 
         foreach (Cursor cursor in state.Cursors)

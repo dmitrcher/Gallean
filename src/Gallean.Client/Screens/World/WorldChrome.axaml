@@ -21,6 +21,12 @@
     <Setter Property="CornerRadius" Value="{StaticResource RadiusXl}" />
     <Setter Property="BoxShadow" Value="{x:Static local:Theme+Hud.PlateShadow}" />
   </Style>
+  <Style Selector="TextBlock.income-cell">
+    <Setter Property="Margin" Value="20,0,0,0" />
+    <Setter Property="HorizontalAlignment" Value="Right" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="TextAlignment" Value="Right" />
+  </Style>
   <Style Selector="Border.world-plate.panel">
     <Setter Property="Background" Value="{StaticResource HudPanelBrush}" />
   </Style>
@@ -297,10 +303,10 @@
   <Style Selector="Button.world-medallion Border.current-player-portrait">
     <Setter Property="Width" Value="{x:Static local:MedallionTexture.FaceSize}" />
     <Setter Property="Height" Value="{x:Static local:MedallionTexture.FaceSize}" />
-    <Setter Property="CornerRadius" Value="{x:Static local:MedallionTexture.FaceCornerRadius}" />
-    <Setter Property="ClipToBounds" Value="True" />
     <Setter Property="IsHitTestVisible" Value="False" />
     <Setter Property="Opacity" Value="0" />
+    <Setter Property="CornerRadius" Value="{x:Static local:MedallionTexture.FaceCornerRadius}" />
+    <Setter Property="ClipToBounds" Value="True" />
     <Setter Property="Transitions">
       <Transitions>
         <DoubleTransition Property="Opacity" Delay="0:0:0.5" Duration="0:0:0.3" Easing="CubicEaseOut" />
@@ -353,18 +359,6 @@
   <Style Selector="StackPanel.world-caption local|OutlinedTextBlock.world-caption">
     <Setter Property="Margin" Value="0" />
     <Setter Property="VerticalAlignment" Value="Center" />
-  </Style>
-  <Style Selector="Border.hotkey-pill">
-    <Setter Property="Padding" Value="9,1" />
-    <Setter Property="VerticalAlignment" Value="Center" />
-    <Setter Property="Background" Value="{StaticResource HudHotkeyPillBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource HudHotkeyPillBorderBrush}" />
-    <Setter Property="BorderThickness" Value="2" />
-    <Setter Property="CornerRadius" Value="12" />
-  </Style>
-  <Style Selector="Border.hotkey-pill TextBlock">
-    <Setter Property="Foreground" Value="{StaticResource HudHotkeyTextBrush}" />
-    <Setter Property="FontSize" Value="{StaticResource FontSizeSm}" />
   </Style>
 
   <Style Selector="local|HoverItemsControl.world-wheel">

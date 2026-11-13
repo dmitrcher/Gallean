@@ -1,22 +1,16 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Presenters;
-using Avalonia.Controls.Primitives;
 using Avalonia.Data;
-using Avalonia.Input;
-using Avalonia.Interactivity;
 using Avalonia.Platform;
-using Avalonia.VisualTree;
 
 namespace Gallean.Client;
 
 internal sealed partial class GameView : Window
 {
+    private const double SceneHeight = 600.0;
+
     public static readonly StyledProperty<bool> IsWindowedProperty =
         AvaloniaProperty.Register<GameView, bool>(nameof(IsWindowed), defaultValue: true, defaultBindingMode: BindingMode.TwoWay);
-
-    public static readonly StyledProperty<AbstractScreenViewModel?> TopScreenProperty =
-        AvaloniaProperty.Register<GameView, AbstractScreenViewModel?>(nameof(TopScreen));
 
     private readonly Size minSize;
     private Task? exitSaveTask;
@@ -30,24 +24,16 @@ internal sealed partial class GameView : Window
         ScalingChanged += OnScalingChanged;
         PositionChanged += OnPositionChanged;
         Resized += OnResized;
-
-        AddHandler(PointerPressedEvent, OnDetailsPointerPressed, RoutingStrategies.Tunnel, true);
-        AddHandler(PointerReleasedEvent, OnDetailsPointerReleased, RoutingStrategies.Tunnel, true);
-        AddHandler(PointerCaptureLostEvent, OnDetailsPointerCaptureLost, RoutingStrategies.Tunnel, true);
     }
 
     private GameViewModel? ViewModel => (GameViewModel?)DataContext;
+
+    internal ItemsControl ScreenHost => Surface.ScreenHost;
 
     public bool IsWindowed
     {
         get => GetValue(IsWindowedProperty);
         set => SetValue(IsWindowedProperty, value);
-    }
-
-    public AbstractScreenViewModel? TopScreen
-    {
-        get => GetValue(TopScreenProperty);
-        set => SetValue(TopScreenProperty, value);
     }
 
     protected override void OnOpened(EventArgs e)
@@ -84,49 +70,6 @@ internal sealed partial class GameView : Window
         Close();
     }
 
-    protected override void OnGotFocus(FocusChangedEventArgs e)
-    {
-        base.OnGotFocus(e);
-
-        if (e.Source is Visual focused)
-        {
-            focused.DetachedFromVisualTree += OnFocusedDetached;
-        }
-    }
-
-    protected override void OnLostFocus(FocusChangedEventArgs e)
-    {
-        base.OnLostFocus(e);
-
-        if (e.Source is Visual focused)
-        {
-            focused.DetachedFromVisualTree -= OnFocusedDetached;
-        }
-    }
-
-    protected override void OnKeyDown(KeyEventArgs e)
-    {
-        base.OnKeyDown(e);
-
-        if (!e.Handled && TopScreen is not null)
-        {
-            Control? container = ScreenHost.ContainerFromItem(TopScreen);
-
-            if (container is ContentPresenter { Child: not null } presenter)
-            {
-                foreach (KeyBinding binding in presenter.Child.KeyBindings)
-                {
-                    if (e.Handled)
-                    {
-                        break;
-                    }
-
-                    binding.TryHandle(e);
-                }
-            }
-        }
-    }
-
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs e)
     {
         base.OnPropertyChanged(e);
@@ -140,10 +83,6 @@ internal sealed partial class GameView : Window
                 WindowState = IsWindowed ? WindowState.Normal : WindowState.FullScreen;
             }
         }
-        else if (e.Property == TopScreenProperty)
-        {
-            FocusTopScreen();
-        }
         else if (e.Property == WindowStateProperty)
         {
             bool windowed = WindowState != WindowState.FullScreen;
@@ -155,16 +94,6 @@ internal sealed partial class GameView : Window
 
             FitToScreen();
         }
-    }
-
-    private void OnFocusedDetached(object? sender, VisualTreeAttachmentEventArgs e)
-    {
-        if (sender is Visual visual)
-        {
-            visual.DetachedFromVisualTree -= OnFocusedDetached;
-        }
-
-        FocusTopScreen();
     }
 
     private void OnScalingChanged(object? sender, EventArgs e)
@@ -200,6 +129,8 @@ internal sealed partial class GameView : Window
 
         MinWidth = Math.Min(minSize.Width, maxClientSize.Width);
         MinHeight = Math.Min(minSize.Height, maxClientSize.Height);
+        Surface.MinContentWidth = MinWidth;
+        Surface.MinContentHeight = MinHeight;
 
         if (WindowState == WindowState.Normal)
         {
@@ -217,111 +148,19 @@ internal sealed partial class GameView : Window
                     Math.Max(area.Y, Math.Min(Position.Y, area.Bottom - pixelSize.Height)));
             }
         }
+
+        UpdateAssetPixelScale(screen);
     }
 
-    private void OnDetailsPointerPressed(object? sender, PointerPressedEventArgs e)
+    private void UpdateAssetPixelScale(Screen screen)
     {
-        PointerPoint point = e.GetCurrentPoint(this);
-        GameViewModel? game = ViewModel;
+        IAssetProvider? assets = AssetScope.GetOptionalAssets(this);
 
-        if (point.Properties.IsRightButtonPressed && game is not null)
+        if (assets is not null)
         {
-            object? content = GetDetailsContentAt(e);
+            int maxPixelScale = (int)Math.Ceiling(screen.Bounds.Height / SceneHeight);
 
-            if (content is not null)
-            {
-                game.ShowDetails(content);
-                e.Pointer.Capture(this);
-                e.Handled = true;
-            }
-        }
-    }
-
-    private void OnDetailsPointerReleased(object? sender, PointerReleasedEventArgs e)
-    {
-        GameViewModel? game = ViewModel;
-
-        if (e.InitialPressMouseButton == MouseButton.Right && game is not null)
-        {
-            game.HideDetails();
-
-            if (ReferenceEquals(e.Pointer.Captured, this))
-            {
-                e.Pointer.Capture(null);
-            }
-        }
-    }
-
-    private void OnDetailsPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
-    {
-        ViewModel?.HideDetails();
-    }
-
-    private object? GetDetailsContentAt(PointerEventArgs e)
-    {
-        if (TopScreen is not null)
-        {
-            Control? container = ScreenHost.ContainerFromItem(TopScreen);
-
-            if (container is not null)
-            {
-                Point position = e.GetPosition(this);
-
-                foreach (Visual visual in this.GetVisualsAt(position))
-                {
-                    IDetailsSource? source = FindDetailsSource(visual, container);
-
-                    if (source is not null)
-                    {
-                        return source.DetailsContent;
-                    }
-                }
-            }
-        }
-
-        return null;
-    }
-
-    private static IDetailsSource? FindDetailsSource(Visual visual, Control screen)
-    {
-        IDetailsSource? source = null;
-
-        for (Visual? current = visual; current is not null; current = GetParent(current))
-        {
-            if (current == screen)
-            {
-                return source;
-            }
-
-            source ??= current.DataContext as IDetailsSource;
-        }
-
-        return null;
-
-        static Visual? GetParent(Visual visual)
-        {
-            if (visual is OverlayPopupHost)
-            {
-                return visual.Parent as Visual;
-            }
-            else
-            {
-                return visual.GetVisualParent();
-            }
-        }
-    }
-
-    private void FocusTopScreen()
-    {
-        if (TopScreen is not null)
-        {
-            Control? container = ScreenHost.ContainerFromItem(TopScreen);
-
-            if (container is ContentPresenter presenter)
-            {
-                presenter.ApplyTemplate();
-                presenter.Child?.Focus();
-            }
+            assets.SetMaxPixelScale(maxPixelScale);
         }
     }
 }

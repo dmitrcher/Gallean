@@ -14,7 +14,9 @@ internal sealed partial class BuildingTabView : UserControl
         InitializeComponent();
     }
 
-    private static void PlaceDetails(CustomPopupPlacement placement)
+    // Popup placement callbacks must be instance methods: the XAML compiler binds them to the view, and Mono (Android)
+    // then passes the view instead of the placement to a static method.
+    private void PlaceDetails(CustomPopupPlacement placement)
     {
         placement.ConstraintAdjustment = PopupPositionerConstraintAdjustment.SlideY;
 

@@ -1,0 +1,58 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:Gallean.Client"
+             x:Class="Gallean.Client.UpdatePromptView"
+             x:DataType="local:UpdatePromptViewModel">
+
+  <Border Background="{StaticResource ModalBackdropBrush}">
+    <local:ModalPanel Classes="accent" MinWidth="440" MaxWidth="620" Padding="28,24" Title="{local:Text 'Update available'}" InitialFocus="{Binding #InstallButton}">
+
+      <local:ModalPanel.Footer>
+        <Grid ColumnDefinitions="*,Auto,Auto,*">
+          <Panel Grid.Column="1" Margin="0,0,16,0">
+            <Button x:Name="InstallButton"
+                    Content="{local:Text 'Update'}"
+                    Classes="pill success"
+                    local:PlateChrome.TextureSeed="1"
+                    Command="{Binding InstallCommand}"
+                    IsVisible="{Binding CanInstall}"
+                    MinWidth="150" />
+            <Button Content="{local:Text 'Download'}"
+                    Classes="pill success"
+                    local:PlateChrome.TextureSeed="1"
+                    Click="OnDownloadClick"
+                    IsVisible="{Binding !CanInstall}"
+                    MinWidth="150" />
+          </Panel>
+          <Button Grid.Column="2"
+                  Content="{Binding CloseText}"
+                  Classes="pill"
+                  local:PlateChrome.TextureSeed="2"
+                  Command="{Binding CloseCommand}"
+                  IsEnabled="{Binding CanClose}"
+                  MinWidth="150" />
+        </Grid>
+      </local:ModalPanel.Footer>
+
+      <StackPanel Spacing="16">
+        <TextBlock local:TextRuns.Spans="{Binding Message}"
+                   Classes="body"
+                   Foreground="{StaticResource PrimaryTextBrush}"
+                   TextWrapping="Wrap"
+                   TextAlignment="Center" />
+        <ProgressBar Minimum="0"
+                     Maximum="1"
+                     Value="{Binding DownloadProgress}"
+                     IsIndeterminate="{Binding !CanClose}"
+                     IsVisible="{Binding IsInstalling}"
+                     Foreground="{StaticResource AccentBrush}"
+                     Background="{StaticResource PanelBorderBrush}"
+                     Height="4"
+                     MinHeight="4"
+                     CornerRadius="2" />
+      </StackPanel>
+
+    </local:ModalPanel>
+  </Border>
+
+</UserControl>

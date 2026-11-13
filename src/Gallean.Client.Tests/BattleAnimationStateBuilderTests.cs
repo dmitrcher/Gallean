@@ -116,8 +116,7 @@ public sealed class BattleAnimationStateBuilderTests
         {
             AnimationEasing.LinearEasing => "Linear",
             AnimationEasing.SmoothEasing => "Smooth",
-            AnimationEasing.DecelerateEasing => "Decelerate",
-            _ => throw new ArgumentOutOfRangeException(nameof(easing), easing, null)
+            AnimationEasing.DecelerateEasing => "Decelerate"
         };
     }
 
@@ -4906,7 +4905,7 @@ public sealed class BattleAnimationStateBuilderTests
     }
 
     [Test]
-    public void ParalyzeThenSkipTest()
+    public void ParalyzeEndTest()
     {
         BattleRenderState.Unit attacker = new(
             Id: new BattleUnitId(1),
@@ -4979,14 +4978,14 @@ public sealed class BattleAnimationStateBuilderTests
                 new BattleUnitTurnStartedEvent(new BattleUnitTurn(new BattleUnitId(1), BattleUnitTurnType.Normal))
             ]);
         Assert.That(FormatAnimation(Assert.NotNull(animation)), Is.EqualTo([
-            "sequence 45 frames",
+            "sequence 57 frames",
             "@0 unit 1 body Attack Alive for 16 frames",
             "@0 sound battle-unit-attack/atk/4",
             "@7 unit 2 feedback +15 Effect Paralyzed",
             "@7 unit 2 frozen True",
             "@7 sound battle-unit-touch/atk/4",
             "@16 unit 1 body Idle Alive",
-            "@26 unit 2 feedback +15 Action Skipped",
+            "@26 unit 2 feedback +15 Effect Paralysis broken!",
             "@41 unit 2 frozen False"
         ]));
     }

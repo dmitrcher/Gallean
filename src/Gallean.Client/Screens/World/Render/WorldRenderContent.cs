@@ -15,6 +15,7 @@ internal sealed record WorldRenderContent(
     SpriteAtlas ObjectAtlas,
     IReadOnlyList<int> ObjectSpriteDepths,
     IReadOnlyList<WorldRenderContent.DirectSprite> DirectSprites,
+    IReadOnlyList<WorldRenderContent.MountainCloudSprite> MountainClouds,
     IReadOnlyList<WorldRenderContent.StackSprite> Stacks,
     WorldRenderContent.FogLayer? Fog,
     WorldRenderContent.ReachLayer? Reach,
@@ -24,6 +25,7 @@ internal sealed record WorldRenderContent(
     IReadOnlyList<WorldRenderContent.HitTarget> HitTargets,
     WorldReachShaderProgram ReachShaderProgram,
     WorldHighlightShaderProgram HighlightShaderProgram,
+    WorldMountainCloudShaderProgram MountainCloudShaderProgram,
     WorldBattleTransitionShaderProgram BattleTransitionShaderProgram)
 {
     public sealed record GroundLayer(SKVertices Mesh, SKShader TerrainShader);
@@ -50,7 +52,9 @@ internal sealed record WorldRenderContent(
 
     public sealed record StackSprite(WorldRenderState.Stack Stack, Rect Bounds);
 
-    public abstract record DirectSprite(Point Anchor, int Depth, Rect Bounds, double Opacity)
+    public sealed record MountainCloudSprite(int Depth, Rect Bounds, SKShader Mask, float Phase, float Strength);
+
+    public closed record DirectSprite(Point Anchor, int Depth, Rect Bounds, double Opacity)
     {
         public sealed record Animation(AssetAnimationKey Key, Point Anchor, int Depth, Rect Bounds, double Opacity)
             : DirectSprite(Anchor, Depth, Bounds, Opacity);

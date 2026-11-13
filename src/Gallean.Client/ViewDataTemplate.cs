@@ -32,6 +32,8 @@ internal sealed class ViewDataTemplate : IDataTemplate
             ItemDetailsViewModel => new ItemDetailsView(),
             LeaderBlankslateViewModel => new LeaderBlankslateView(),
             LeaderExportScreenViewModel => new LeaderExportScreenView(),
+            LeaderExportSelectScreenViewModel => new LeaderExportSelectScreenView(),
+            LeaderImportScreenViewModel => new LeaderImportScreenView(),
             LeaderPurchaseViewModel => new LeaderPurchaseView(),
             LeaderUpgradeViewModel => new LeaderUpgradeView(),
             LoadGameScreenViewModel => new LoadGameScreenView(),
@@ -56,12 +58,14 @@ internal sealed class ViewDataTemplate : IDataTemplate
             SpellbookTabViewModel => new SpellbookTabView(),
             StackLeaderViewModel => new StackLeaderView(),
             StackTabViewModel => new StackTabView(),
+            TextPromptViewModel => new TextPromptView(),
             ThiefActionResultScreenViewModel => new ThiefActionResultScreenView(),
             ThiefActionScreenViewModel => new ThiefActionScreenView(),
             ThiefStealScreenViewModel => new ThiefStealScreenView(),
             TrainerTabViewModel => new TrainerTabView(),
             UnitDetailsViewModel => new UnitDetailsView(),
             UnitPurchaseViewModel => new UnitPurchaseView(),
+            UpdatePromptViewModel => new UpdatePromptView(),
             WorldScreenViewModel world => new WorldScreenView(world.GameModel.Definitions, world.GameModel.Scenario, world.Game.DevTools.Diagnostics),
             _ => throw new NotSupportedException()
         };

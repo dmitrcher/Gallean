@@ -4,7 +4,7 @@ using Gallean.Common;
 
 namespace Gallean.Engine;
 
-internal static class BattleAttackCalculator
+internal static partial class BattleAttackCalculator
 {
     public sealed record AttackInfo(
         ImmutableArray<UnitAttackDefinition> Attacks,
@@ -167,50 +167,10 @@ internal static class BattleAttackCalculator
             return new TargetInfo(SummonAttackResolver.Instance.GetTargets(state, attackerId, target, attack), null);
         }
 
-        BattleUnitId? targetUnitId = target.GetUnitId();
-        if (targetUnitId is null)
-        {
-            return new TargetInfo([], BattleCommandError.AttackRequiresUnitTarget);
-        }
-
         BattleUnit attacker = state.GetUnit(attackerId);
-        BattleUnit targetUnit = state.GetUnit(targetUnitId.Value);
+        TargetResolver.Context resolverContext = new(state, attacker, attack);
 
-        BattleSide? targetSide = GetTargetSide(targetType, attacker);
-
-        if (targetSide is not null && targetUnit.Side != targetSide)
-        {
-            return new TargetInfo([], BattleCommandError.TargetIncorrect);
-        }
-
-        if (attack.Reach == UnitAttackReach.All)
-        {
-            List<BattleAttackTarget> targets = [];
-
-            foreach ((BattleUnit unit, _) in state.GetGrid(targetUnit.Side).GetUnits())
-            {
-                if (CanTarget(unit, attack))
-                {
-                    targets.Add(new BattleAttackUnitTarget(unit.Id));
-                }
-            }
-
-            if (!targets.Contains(target))
-            {
-                return new TargetInfo([], BattleCommandError.TargetIncorrect);
-            }
-
-            return new TargetInfo(targets, null);
-        }
-        else
-        {
-            if (targetType == UnitAttackTargetType.Enemy && !ReachCalculator.IsTargetReachable(state, attacker, targetUnit, attack))
-            {
-                return new TargetInfo([], BattleCommandError.TargetNotReachable);
-            }
-
-            return new TargetInfo([target], null);
-        }
+        return TargetResolver.Resolve(target, resolverContext);
     }
 
     public static BattleAttackResult ResolveAttackStep(
@@ -297,31 +257,6 @@ internal static class BattleAttackCalculator
         }
 
         return attacks.ToImmutable();
-    }
-
-    private static BattleSide? GetTargetSide(UnitAttackTargetType targetType, BattleUnit attacker)
-    {
-        return targetType switch
-        {
-            UnitAttackTargetType.Enemy => attacker.Side.GetOpposite(),
-            UnitAttackTargetType.Ally => attacker.Side,
-            UnitAttackTargetType.Any => null,
-            UnitAttackTargetType.Tile => attacker.Side
-        };
-    }
-
-    private static bool CanTarget(BattleUnit unit, UnitAttackDefinition attack)
-    {
-        UnitAttackTypeInfo attackTypeInfo = attack.Type.GetInfo();
-
-        if (attackTypeInfo.TargetsDead)
-        {
-            return unit is { IsAlive: false, IsRevived: false };
-        }
-        else
-        {
-            return unit.IsActive();
-        }
     }
 
     private static int GetAccuracyReductionPerTarget(BattleState state, IEngineContext context, BattleUnitId attackerId)

@@ -48,6 +48,7 @@ internal sealed partial class WorldRenderComposer(
         WorldStackId? animatedStackId = animation?.Accept(WorldAnimationStackVisitor.Instance, Empty.Value);
 
         MapTerrain terrain = terrainPart.Resolve(new Terrain.Input(state.Map));
+        TerrainExpansionAnimation? terrainExpansion = ResolveTerrainExpansion(terrain);
         IReadOnlyList<Cloud> clouds = cloudsPart.Resolve(new Clouds.Input(state.Map.Width, state.Map.Height));
         IReadOnlyList<FogTile> fogTiles = fogPart.Resolve(new Fog.Input(visibility));
         IReadOnlyList<MapObject> landmarks = landmarksPart.Resolve(new Landmarks.Input(state.Landmarks, state.Map, visibility));
@@ -65,21 +66,20 @@ internal sealed partial class WorldRenderComposer(
         IReadOnlyList<AmbientSound> ambientSounds = ambientSoundsPart.Resolve(new AmbientSounds.Input(state.Fortifications, state.Landmarks, state.Sites, state.ResourceNodes, playerRaces, visibility));
         MinimapState minimap = minimapPart.Resolve(new Minimap.Input(state.Map, state.Fortifications, state.Stacks, playerRaces, visibility, request.ViewPlayerId, request.FogEnabled));
 
-        ReachOverlay? reach;
-        HighlightOverlay highlights;
+        ReachOverlay? reach = null;
+        List<Highlight> highlights = [];
 
-        if (animation is StackBattle or BattleTransition)
-        {
-            reach = null;
-            highlights = new HighlightOverlay([]);
-        }
-        else
+        highlights.AddRange(BuildRiotHighlights(state.Fortifications, fortifications));
+
+        if (animation is not (StackBattle or BattleTransition))
         {
             reach = BuildReachOverlay(request, animatedStackId);
-            highlights = BuildHighlights(request, plan, stacks, fortifications, animatedStackId);
+            highlights.AddRange(BuildCursorHighlights(request, plan, stacks, fortifications, animatedStackId));
         }
 
-        PathOverlay? selectedPathOverlay = BuildSelectedPathOverlay(request);
+        HighlightOverlay highlightOverlay = new(highlights);
+
+        PathOverlay? selectedPathOverlay = BuildSelectedPathOverlay(request, animatedStackId);
         IReadOnlyList<Cursor> cursors = BuildCursors(request, visibility, plan, definitions, selectedPathOverlay);
 
         WorldRenderState world = BuildWorld(
@@ -87,13 +87,14 @@ internal sealed partial class WorldRenderComposer(
             mapObjects,
             stacks,
             animation,
+            terrainExpansion,
             clouds,
             fogTiles,
             objectiveMarkers,
             ambientSounds,
             cursors,
             reach,
-            highlights,
+            highlightOverlay,
             selectedPathOverlay,
             minimap);
 
@@ -107,6 +108,7 @@ internal sealed partial class WorldRenderComposer(
         IReadOnlyList<MapObject> mapObjects,
         IReadOnlyList<MapObject> stacks,
         WorldAnimation? animation,
+        TerrainExpansionAnimation? terrainExpansion,
         IReadOnlyList<Cloud> clouds,
         IReadOnlyList<FogTile> fogTiles,
         IReadOnlyList<ObjectiveMarker> objectiveMarkers,
@@ -122,6 +124,7 @@ internal sealed partial class WorldRenderComposer(
             ReferenceEquals(previousState.MapObjects, mapObjects) &&
             ReferenceEquals(previousState.Stacks, stacks) &&
             ReferenceEquals(previousState.Animation, animation) &&
+            ReferenceEquals(previousState.TerrainExpansion, terrainExpansion) &&
             ReferenceEquals(previousState.Clouds, clouds) &&
             ReferenceEquals(previousState.FogTiles, fogTiles) &&
             ReferenceEquals(previousState.ObjectiveMarkers, objectiveMarkers) &&
@@ -141,6 +144,7 @@ internal sealed partial class WorldRenderComposer(
                 mapObjects,
                 stacks,
                 animation,
+                terrainExpansion,
                 clouds,
                 fogTiles,
                 objectiveMarkers,
@@ -183,7 +187,6 @@ internal sealed partial class WorldRenderComposer(
                 WorldAnimationState.StackCreate data => AnimationBuilder.BuildStackCreate(assets, data.Position),
                 WorldAnimationState.StackOwnerChange data => AnimationBuilder.BuildStackOwnerChange(assets, data.Position),
                 WorldAnimationState.MountainRemove data => AnimationBuilder.BuildMountainRemove(assets, data.Center, data.Radius),
-                WorldAnimationState.TerrainExpansion data => new TerrainExpansionBuilder(data.OldMap, request.State.Map).Build(),
                 WorldAnimationState.Pause data => new Pause(data.Duration),
                 WorldAnimationState.StackBattle data => AnimationBuilder.BuildStackBattle(assets, data.Position),
                 WorldAnimationState.BattleStart data => new BattleTransition(data.Position, BattleTransitionType.In),
@@ -196,12 +199,27 @@ internal sealed partial class WorldRenderComposer(
                     assets,
                     data.SpellId,
                     data.Position,
-                    data.SummonedStackId),
-                _ => throw new ArgumentOutOfRangeException(nameof(request), request.Animation, null)
+                    data.SummonedStackId)
             };
         }
 
         return currentAnimation;
+    }
+
+    private TerrainExpansionAnimation? ResolveTerrainExpansion(MapTerrain terrain)
+    {
+        TerrainExpansionAnimation? previous = previousState?.TerrainExpansion;
+
+        if (previousState is not null && !ReferenceEquals(previousState.Terrain, terrain))
+        {
+            TerrainExpansionBuilder builder = new(previousState.Terrain.Map, terrain.Map);
+
+            return builder.Build() ?? previous;
+        }
+        else
+        {
+            return previous;
+        }
     }
 
     private static IReadOnlyList<Cursor> BuildCursors(
@@ -319,7 +337,30 @@ internal sealed partial class WorldRenderComposer(
         return cursors;
     }
 
-    private static HighlightOverlay BuildHighlights(
+    private static IReadOnlyList<Highlight> BuildRiotHighlights(
+        ImmutableSortedDictionary<WorldFortificationId, WorldFortification> fortifications,
+        IReadOnlyList<MapObject> fortificationObjects)
+    {
+        List<Highlight> highlights = [];
+
+        foreach (WorldFortification fortification in fortifications.Values)
+        {
+            if (fortification is WorldCity { RiotTurns: > 0 })
+            {
+                foreach (MapObject item in fortificationObjects)
+                {
+                    if (item is Fortification target && target.Footprint == fortification.Footprint)
+                    {
+                        highlights.Add(new Highlight(target, Theme.World.Highlight.RiotColor));
+                    }
+                }
+            }
+        }
+
+        return highlights;
+    }
+
+    private static IReadOnlyList<Highlight> BuildCursorHighlights(
         WorldRenderRequest request,
         WorldPlan plan,
         IReadOnlyList<MapObject> stacks,
@@ -330,7 +371,9 @@ internal sealed partial class WorldRenderComposer(
         List<Highlight> highlights = [];
         WorldStack? selected = null;
 
-        if (cursor.StackId is not null && cursor.StackId != animatedStackId)
+        if (!request.IsPlayingEvent &&
+            cursor.StackId is not null &&
+            cursor.StackId != animatedStackId)
         {
             selected = request.State.Stacks.GetValueOrDefault(cursor.StackId.Value);
         }
@@ -347,7 +390,12 @@ internal sealed partial class WorldRenderComposer(
             }
         }
 
-        WorldPosition? hostileTarget = cursor.HoverPath?.Encounter?.Accept(HostileEncounterVisitor.Instance, Empty.Value);
+        WorldPosition? hostileTarget = null;
+
+        if (!request.IsPlayingEvent || cursor.StackId == animatedStackId)
+        {
+            hostileTarget = cursor.Path?.Encounter?.Accept(HostileEncounterVisitor.Instance, Empty.Value);
+        }
 
         if (hostileTarget is not null)
         {
@@ -359,7 +407,7 @@ internal sealed partial class WorldRenderComposer(
             }
         }
 
-        return new HighlightOverlay(highlights);
+        return highlights;
 
         MapObject? FindStackObject(WorldPosition position)
         {
@@ -402,7 +450,8 @@ internal sealed partial class WorldRenderComposer(
         {
             return new ReachOverlay(cursor.Action.TargetPositions);
         }
-        else if (cursor.StackId is not null &&
+        else if (!request.IsPlayingEvent &&
+                 cursor.StackId is not null &&
                  cursor.StackId != animatedStackId &&
                  cursor.Action is null &&
                  cursor.ReachablePositions.Count > 0)
@@ -418,13 +467,15 @@ internal sealed partial class WorldRenderComposer(
         return null;
     }
 
-    private static PathOverlay? BuildSelectedPathOverlay(WorldRenderRequest request)
+    private static PathOverlay? BuildSelectedPathOverlay(WorldRenderRequest request, WorldStackId? animatedStackId)
     {
         WorldCursor cursor = request.Cursor;
-        WorldPathSelection? selection = cursor.HoverPath;
+        WorldPathSelection? selection = cursor.Path;
 
         if (selection is not null &&
+            cursor.Action is null &&
             cursor.StackId is not null &&
+            (!request.IsPlayingEvent || cursor.StackId == animatedStackId) &&
             request.State.Stacks.TryGetValue(cursor.StackId.Value, out WorldStack? stack))
         {
             IReadOnlyList<PathStep> steps = BuildPathSteps(selection);
@@ -460,8 +511,22 @@ internal sealed partial class WorldRenderComposer(
 
         foreach (WorldPathSegment segment in selection.Path.Segments)
         {
+            Color stepInnerColor;
+            Color stepOuterColor;
+
+            if (segment.Turn > 0)
+            {
+                stepInnerColor = Theme.World.Path.UnreachedInnerColor;
+                stepOuterColor = Theme.World.Path.UnreachedOuterColor;
+            }
+            else
+            {
+                stepInnerColor = innerColor;
+                stepOuterColor = outerColor;
+            }
+
             totalCost += segment.Cost;
-            steps.Add(new PathStep(segment.End, innerColor, outerColor, FormatCost(totalCost)));
+            steps.Add(new PathStep(segment.End, stepInnerColor, stepOuterColor, FormatCost(totalCost)));
         }
 
         foreach (WorldPathSegment segment in selection.Remainder.Segments)

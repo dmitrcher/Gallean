@@ -20,6 +20,8 @@ internal sealed partial class BattleScreenView : UserControl
         Battlefield.AddHandler(PointerPressedEvent, OnBattlefieldPointerPressed, RoutingStrategies.Bubble, true);
         Battlefield.AddHandler(PointerReleasedEvent, OnBattlefieldPointerReleased, RoutingStrategies.Bubble, true);
         Battlefield.AddHandler(PointerCaptureLostEvent, OnBattlefieldPointerCaptureLost, RoutingStrategies.Bubble, true);
+
+        InitializeTouch();
     }
 
     private BattleScreenViewModel ViewModel => (BattleScreenViewModel)DataContext!;
@@ -31,6 +33,10 @@ internal sealed partial class BattleScreenView : UserControl
         if (point.Properties.IsRightButtonPressed && ViewModel.InspectedUnit is not null)
         {
             BattlefieldUnitDetails.IsOpen = true;
+        }
+        else if (e.Pointer.Type == PointerType.Touch && Battlefield.HitTestPointer(e) is { } tile)
+        {
+            SetTouchTarget(Battlefield, tile);
         }
     }
 
@@ -57,6 +63,12 @@ internal sealed partial class BattleScreenView : UserControl
             {
                 ViewModel.ShowUnitDetails(unit.UnitId);
                 SetDetailsOpen(control, true);
+                e.Pointer.Capture(control);
+                e.Handled = true;
+            }
+            else if (e.Pointer.Type == PointerType.Touch)
+            {
+                SetTouchTarget(control, unit.Tile);
                 e.Pointer.Capture(control);
                 e.Handled = true;
             }
@@ -90,6 +102,12 @@ internal sealed partial class BattleScreenView : UserControl
                     e.Pointer.Capture(control);
                     e.Handled = true;
                 }
+            }
+            else if (e.Pointer.Type == PointerType.Touch)
+            {
+                SetTouchTarget(control, tile.Tile);
+                e.Pointer.Capture(control);
+                e.Handled = true;
             }
             else if (point.Properties.IsLeftButtonPressed)
             {
@@ -172,7 +190,8 @@ internal sealed partial class BattleScreenView : UserControl
         }
     }
 
-    private static void PlaceItemDetails(CustomPopupPlacement placement)
+    // Instance method on purpose; see BuildingTabView.PlaceDetails.
+    private void PlaceItemDetails(CustomPopupPlacement placement)
     {
         double gap = ItemDetailsGap * UiScaleDecorator.GetScalingFactor(placement.Target);
 
@@ -182,7 +201,8 @@ internal sealed partial class BattleScreenView : UserControl
         placement.Offset = new Point(0, -ItemDetailsGap * UiScaleDecorator.GetScalingFactor(placement.Target));
     }
 
-    private static void PlaceUnitDetails(CustomPopupPlacement placement)
+    // Instance method on purpose; see BuildingTabView.PlaceDetails.
+    private void PlaceUnitDetails(CustomPopupPlacement placement)
     {
         placement.ConstraintAdjustment = PopupPositionerConstraintAdjustment.SlideY;
 

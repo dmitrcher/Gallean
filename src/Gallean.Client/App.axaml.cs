@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -8,9 +9,9 @@ using Gallean.Configuration;
 
 namespace Gallean.Client;
 
-internal sealed class App(ILog log) : Application
+internal sealed class App(ILog log, GCMemoryInfo memoryInfo) : Application
 {
-    private readonly CleanupList cleanupList = new();
+    private CleanupList cleanupList = new();
     private GameViewModel? currentGame;
     private Exception? currentGameException;
 
@@ -22,77 +23,136 @@ internal sealed class App(ILog log) : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
-        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        // Mobile platforms deliver input from their own main loop, outside Avalonia's dispatcher jobs, so without
+        // this the continuations of awaits started by input run on the thread pool and build views off the UI thread.
+        AvaloniaSynchronizationContext.InstallIfNeeded();
+
+        IGameHost? host = ApplicationLifetime switch
         {
-            Dispatcher.UIThread.UnhandledException += (_, ev) => OnUnhandledException(desktop, ev);
-            desktop.Exit += (_, _) => cleanupList.Dispose();
-            _ = TryStartGameAsync(desktop);
+            IClassicDesktopStyleApplicationLifetime desktop => new DesktopGameHost(desktop),
+            ISingleViewApplicationLifetime singleView => new SingleViewGameHost(singleView),
+            _ => null
+        };
+
+        if (host is not null)
+        {
+            Dispatcher.UIThread.UnhandledException += (_, ev) => OnUnhandledException(host, ev);
+            host.Exiting += (_, _) => cleanupList.Dispose();
+            _ = TryStartGameAsync(host);
         }
 
         base.OnFrameworkInitializationCompleted();
     }
 
-    private async Task TryStartGameAsync(IClassicDesktopStyleApplicationLifetime desktop)
+    private async Task TryStartGameAsync(IGameHost host)
     {
         try
         {
-            await StartGameAsync(desktop);
+            await StartGameAsync(host);
         }
         catch (Exception ex)
         {
             log.Error("Failed to start the game.", ex);
             cleanupList.Dispose();
-            HandleStartupException(desktop, ex);
+            HandleStartupException(host, ex);
         }
     }
 
-    private async Task StartGameAsync(IClassicDesktopStyleApplicationLifetime desktop)
+    private async Task StartGameAsync(IGameHost host)
     {
         GameSettingsStore gameSettingsStore = new(AppDirectories.Root);
         GameSettings gameSettings = await LoadSettingsAsync(gameSettingsStore);
         TextCatalog textCatalog = TextCatalogLoader.Load(gameSettings.EffectiveLanguage);
         textCatalog.MakeCurrent();
 
+        Task prepareTask = ClientPlatform.PrepareAsync is { } prepareAsync ? Task.Run(prepareAsync) : Task.CompletedTask;
+        string? processPath = Environment.ProcessPath;
+        ClientVersion clientVersion = ClientVersion.Get();
+        UpdateClient updateClient = cleanupList.Add(new UpdateClient(clientVersion, AppDirectories.Downloads, log));
+        Task<UpdateInfo?> updateGetLatestTask = ClientPlatform.ChecksForUpdates ? Task.Run(updateClient.TryGetLatestAsync) : Task.FromResult<UpdateInfo?>(null);
+        UpdateInstaller updateInstaller = new(AppContext.BaseDirectory);
+        Task updateCleanupTask = ClientPlatform.ChecksForUpdates ? Task.Run(updateInstaller.Cleanup) : Task.CompletedTask;
+
         Task<AudioOutput> audioOutputTask = Task.Run(() => AudioOutput.CreateAsync(log));
-        Task<AssetProvider> assetProviderTask = Task.Run(AssetProvider.LoadDefault);
+        GameSettingsSource gameSettingsSource = new(gameSettings);
+        Task<AssetProvider> assetProviderTask = Task.Run(() => AssetProvider.LoadDefault(gameSettingsSource, memoryInfo));
         AudioOutput audioOutput = cleanupList.Add(await audioOutputTask);
         AssetProvider assetProvider = cleanupList.Add(await assetProviderTask);
 
         CheckAssetPack(assetProvider);
+        await prepareTask;
 
-        ClientVersion clientVersion = ClientVersion.Get();
+        try
+        {
+            await updateCleanupTask;
+        }
+        catch (Exception ex)
+        {
+            log.Error("Failed to clean up updates.", ex);
+        }
+
         FreeThreadedRandomProvider random = new();
         GameLoader gameLoader = new(random);
         GameSaveStore gameSaveStore = new(AppDirectories.Saves, gameSettings.AutoSaveLimit);
+        LeaderStore leaderStore = new(AppDirectories.Leaders);
         AssetPreloader assetPreloader = new(assetProvider);
         AudioPlayer audioPlayer = new(assetProvider, audioOutput, log, gameSettings.SoundVolumeRatio, gameSettings.MusicVolumeRatio);
         GameViewModel gameViewModel = cleanupList.Add(new GameViewModel(
-            desktop,
+            host.Lifetime,
             assetProvider,
             assetPreloader,
             audioPlayer,
             gameLoader,
             gameSaveStore,
+            leaderStore,
             gameSettingsStore,
-            gameSettings,
+            gameSettingsSource,
             clientVersion,
             log,
             random,
             TaskScheduler.Default));
 
-        GameView gameView = new()
-        {
-            WindowState = gameSettings.Windowed ? WindowState.Normal : WindowState.FullScreen,
-            DataContext = gameViewModel
-        };
+        Control gameView = host.ShowGame(gameViewModel, gameSettings);
 
         AssetScope.SetAssets(gameView, assetProvider);
         AudioScope.SetAudio(gameView, audioPlayer);
-        desktop.MainWindow = gameView;
-        gameView.Show();
 
         currentGame = gameViewModel;
-        gameViewModel.ShowMainMenuCommand.Execute(null);
+        await gameViewModel.ShowMainMenuCommand.ExecuteAsync(null);
+
+        UpdateInfo? latestUpdate = await updateGetLatestTask;
+
+        if (latestUpdate is not null && latestUpdate.Version > clientVersion)
+        {
+            if (gameViewModel.TopScreen is MainMenuScreenViewModel)
+            {
+                gameViewModel.OpenScreen(new UpdatePromptViewModel(
+                    latestUpdate,
+                    clientVersion,
+                    updateClient,
+                    updateInstaller,
+                    () => RestartProcess(host, processPath),
+                    log));
+            }
+        }
+    }
+
+    private void Restart(IGameHost host)
+    {
+        cleanupList = new CleanupList();
+        currentGameException = null;
+        TryStartGameAsync(host).FileAndForget();
+    }
+
+    private static void RestartProcess(IGameHost host, string? processPath)
+    {
+        if (processPath is not null)
+        {
+            string[] args = host.Lifetime is IClassicDesktopStyleApplicationLifetime desktop ? desktop.Args ?? [] : [];
+            using Process process = Process.Start(processPath, args);
+        }
+
+        host.Shutdown();
     }
 
     private static void CheckAssetPack(IAssetMetadataProvider assets)
@@ -119,7 +179,7 @@ internal sealed class App(ILog log) : Application
         }
     }
 
-    private void OnUnhandledException(IClassicDesktopStyleApplicationLifetime desktop, DispatcherUnhandledExceptionEventArgs e)
+    private void OnUnhandledException(IGameHost host, DispatcherUnhandledExceptionEventArgs e)
     {
         e.Handled = true;
 
@@ -136,53 +196,44 @@ internal sealed class App(ILog log) : Application
                     ErrorScreenViewModel errorScreen = new(
                         Tr("An unexpected error occurred.\n{0}", e.Exception.Message),
                         Tr("Exit"),
-                        () => desktop.Shutdown(),
+                        host.Shutdown,
                         log.Location);
 
                     currentGame.OpenScreen(errorScreen);
                 }
                 else
                 {
-                    FatalErrorWindow errorWindow = new(Tr("An unexpected error occurred"), e.Exception.Message, log.Location);
-
-                    SetMainWindow(desktop, errorWindow);
+                    host.ShowError(new FatalErrorView(Tr("An unexpected error occurred"), e.Exception.Message, log.Location));
                 }
             }
             catch (Exception ex)
             {
                 log.Error("Failed to show error details.", ex);
 
-                desktop.Shutdown();
+                host.Shutdown();
             }
         }
     }
 
-    private void HandleStartupException(IClassicDesktopStyleApplicationLifetime desktop, Exception ex)
+    private void HandleStartupException(IGameHost host, Exception ex)
     {
-        Window errorWindow;
+        Control errorView;
 
         if (ex is InstalledAssetPackException assetPackException)
         {
-            AssetPackErrorWindow window = new();
-            string gameDirectory = Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory);
-            AssetPackErrorViewModel errorViewModel = new(assetPackException, gameDirectory, desktop);
-            window.DataContext = errorViewModel;
+            string gameDirectory = Path.TrimEndingDirectorySeparator(ClientPlatform.AssetPackDirectory ?? AppContext.BaseDirectory);
+            AssetPackErrorViewModel errorViewModel = new(assetPackException, gameDirectory, host.Lifetime, () => Restart(host));
 
-            errorWindow = window;
+            errorView = new AssetPackErrorView
+            {
+                DataContext = errorViewModel
+            };
         }
         else
         {
-            errorWindow = new FatalErrorWindow(Tr("Failed to start the game"), ex.Message, log.Location);
+            errorView = new FatalErrorView(Tr("Failed to start the game"), ex.Message, log.Location);
         }
 
-        SetMainWindow(desktop, errorWindow);
-    }
-
-    private static void SetMainWindow(IClassicDesktopStyleApplicationLifetime desktop, Window window)
-    {
-        Window? previousWindow = desktop.MainWindow;
-        desktop.MainWindow = window;
-        window.Show();
-        previousWindow?.Close();
+        host.ShowError(errorView);
     }
 }

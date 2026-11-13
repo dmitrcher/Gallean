@@ -108,9 +108,8 @@
       </local:AnchorPanel>
 
       <StackPanel x:Name="Nav"
-                  Classes="cached"
+                  Classes="cached pill-group"
                   Orientation="Horizontal"
-                  Spacing="5"
                   HorizontalAlignment="Left"
                   VerticalAlignment="Top"
                   Margin="14,10,0,0">
@@ -134,12 +133,68 @@
         </Button>
       </StackPanel>
 
-      <StackPanel x:Name="TopCenter" Classes="cached" Spacing="6" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,10,0,0">
-        <Border Classes="world-plate" HorizontalAlignment="Center">
-          <ContentControl Content="{Binding Status.Resources}" Classes="caption" Foreground="{StaticResource PrimaryTextBrush}" />
+      <StackPanel x:Name="TopCenter" Spacing="6" VerticalAlignment="Top" Margin="0,10,0,0">
+        <Border Classes="world-plate cached"
+                HorizontalAlignment="Center"
+                ToolTip.Placement="Bottom"
+                ToolTip.VerticalOffset="4"
+                ToolTip.ShowDelay="0">
+          <ToolTip.Tip>
+            <ToolTip MaxWidth="480">
+              <StackPanel Spacing="8"
+                          Grid.IsSharedSizeScope="True"
+                          DataContext="{Binding Status.Income}"
+                          x:DataType="local:WorldIncomeViewModel">
+                <local:OutlinedTextBlock Text="{local:Text 'Income per turn'}" Classes="h4" />
+                <StackPanel Spacing="4">
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="Auto" SharedSizeGroup="IncomeName" />
+                      <ColumnDefinition Width="Auto" SharedSizeGroup="IncomeCapital" />
+                      <ColumnDefinition Width="Auto" SharedSizeGroup="IncomeNodes" />
+                      <ColumnDefinition Width="Auto" SharedSizeGroup="IncomeTotal" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="1" Classes="income-cell caption" Text="{local:Text 'Capital'}" Foreground="{StaticResource SecondaryTextBrush}" />
+                    <TextBlock Grid.Column="2" Classes="income-cell caption" Text="{local:Text 'Sources'}" Foreground="{StaticResource SecondaryTextBrush}" />
+                    <TextBlock Grid.Column="3" Classes="income-cell caption" Text="{local:Text 'Total'}" Foreground="{StaticResource SecondaryTextBrush}" />
+                  </Grid>
+                  <ItemsControl ItemsSource="{Binding Rows}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <StackPanel Spacing="4" />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="local:WorldIncomeRowViewModel">
+                        <Grid>
+                          <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" SharedSizeGroup="IncomeName" />
+                            <ColumnDefinition Width="Auto" SharedSizeGroup="IncomeCapital" />
+                            <ColumnDefinition Width="Auto" SharedSizeGroup="IncomeNodes" />
+                            <ColumnDefinition Width="Auto" SharedSizeGroup="IncomeTotal" />
+                          </Grid.ColumnDefinitions>
+                          <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6">
+                            <local:IconVisual Moniker="{Binding Icon}" Width="18" Height="18" VerticalAlignment="Center" />
+                            <TextBlock Classes="body" Text="{Binding Name}" VerticalAlignment="Center" />
+                          </StackPanel>
+                          <TextBlock Grid.Column="1" Classes="income-cell body" Text="{Binding CapitalIncomeText}" Foreground="{StaticResource SecondaryTextBrush}" />
+                          <TextBlock Grid.Column="2" Classes="income-cell body" Text="{Binding ResourceNodesIncomeText}" Foreground="{StaticResource SecondaryTextBrush}" />
+                          <TextBlock Grid.Column="3" Classes="income-cell body" Text="{Binding IncomeText}" />
+                        </Grid>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </StackPanel>
+            </ToolTip>
+          </ToolTip.Tip>
+          <ContentControl Content="{Binding Status.Resources}"
+                          Classes="caption"
+                          Foreground="{StaticResource PrimaryTextBrush}"
+                          IsHitTestVisible="False" />
         </Border>
 
-        <Border Classes="hud-prompt"
+        <Border Classes="hud-prompt cached"
                 HorizontalAlignment="Center"
                 IsVisible="{Binding ActionPromptText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
           <DockPanel>
@@ -296,8 +351,23 @@
                     <local:AnchorPanel Classes="world-caption-anchor" IsVisible="{Binding #InspectButton.IsPointerOver}">
                       <StackPanel Classes="world-caption">
                         <local:OutlinedTextBlock Classes="world-caption" Text="{local:Text 'Inspect'}" />
-                        <Border Classes="hotkey-pill">
+                        <Border Classes="keycap">
                           <TextBlock Text="{local:Text 'T'}" />
+                        </Border>
+                      </StackPanel>
+                    </local:AnchorPanel>
+                  </Panel>
+                  <Panel>
+                    <Button x:Name="ContinueButton"
+                            Classes="socket world card"
+                            Command="{Binding #Screen.((local:WorldScreenViewModel)DataContext).ContinuePathCommand}">
+                      <local:IconVisual Moniker="ChevronsRight" />
+                    </Button>
+                    <local:AnchorPanel Classes="world-caption-anchor" IsVisible="{Binding #ContinueButton.IsPointerOver}">
+                      <StackPanel Classes="world-caption">
+                        <local:OutlinedTextBlock Classes="world-caption" Text="{local:Text 'Continue'}" />
+                        <Border Classes="keycap">
+                          <TextBlock Text="{local:Text 'M'}" />
                         </Border>
                       </StackPanel>
                     </local:AnchorPanel>
@@ -311,7 +381,7 @@
                     <local:AnchorPanel Classes="world-caption-anchor" IsVisible="{Binding #FinishButton.IsPointerOver}">
                       <StackPanel Classes="world-caption">
                         <local:OutlinedTextBlock Classes="world-caption" Text="{local:Text 'Done'}" />
-                        <Border Classes="hotkey-pill">
+                        <Border Classes="keycap">
                           <TextBlock Text="{local:Text 'Enter'}" />
                         </Border>
                       </StackPanel>
@@ -353,11 +423,11 @@
         </local:MedallionCornerDecorator>
         <local:AnchorPanel Classes="world-caption-anchor medallion" IsVisible="{Binding #EndTurnButton.IsPointerOver}">
           <StackPanel Classes="world-caption">
-            <Border Classes="hotkey-pill">
+            <Border Classes="keycap">
               <TextBlock Text="{local:Text 'E'}" />
             </Border>
             <local:OutlinedTextBlock Classes="world-caption" Text="{local:Text 'or'}" />
-            <Border Classes="hotkey-pill">
+            <Border Classes="keycap">
               <TextBlock Text="{local:Text 'Ctrl+Enter'}" />
             </Border>
           </StackPanel>
@@ -466,7 +536,8 @@
                                          Classes="h4"
                                          Foreground="{StaticResource PrimaryTextBrush}"
                                          HorizontalAlignment="Center"
-                                         TextTrimming="CharacterEllipsis" />
+                                         TextAlignment="Center"
+                                         TextWrapping="Wrap" />
                 <Rectangle Classes="details-rule" IsVisible="{Binding HasDetails}" />
                 <ItemsControl ItemsSource="{Binding Lines}"
                               ItemTemplate="{StaticResource UnitGroupInfoLineTemplate}"
@@ -507,6 +578,19 @@
                                 IsVisible="{Binding Reward, Converter={x:Static ObjectConverters.IsNotNull}}"
                                 HorizontalAlignment="Center"
                                 Foreground="{StaticResource PrimaryTextBrush}" />
+                <StackPanel Orientation="Horizontal"
+                            Spacing="6"
+                            IsVisible="{Binding Income, Converter={x:Static ObjectConverters.IsNotNull}}"
+                            HorizontalAlignment="Center">
+                  <local:OutlinedTextBlock Text="{local:Text 'Income:'}"
+                                           Classes="body"
+                                           Foreground="{StaticResource SecondaryTextBrush}"
+                                           VerticalAlignment="Center" />
+                  <ContentControl Content="{Binding Income}"
+                                  Classes="body"
+                                  VerticalAlignment="Center"
+                                  Foreground="{StaticResource PrimaryTextBrush}" />
+                </StackPanel>
               </StackPanel>
             </local:ModalFrameDecorator>
           </DataTemplate>

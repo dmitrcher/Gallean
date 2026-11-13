@@ -49,7 +49,11 @@ internal sealed class AudioOutput : IDisposable
 
     private static async Task<IWavePlayer> CreateDeviceAsync()
     {
-        if (OperatingSystem.IsWindows())
+        if (ClientPlatform.CreateAudioDevice is { } createAudioDevice)
+        {
+            return createAudioDevice();
+        }
+        else if (OperatingSystem.IsWindows())
         {
             WasapiPlayerBuilder builder = new();
 

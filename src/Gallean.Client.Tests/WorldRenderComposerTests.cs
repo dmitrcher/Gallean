@@ -14,7 +14,8 @@ public sealed class WorldRenderComposerTests
             state.TurnInfo.CurrentPlayerId,
             Cursor: cursor,
             FogEnabled: fogEnabled,
-            Animation: null);
+            Animation: null,
+            IsPlayingEvent: false);
     }
 
     private static WorldRenderState Compose(
@@ -1099,6 +1100,79 @@ public sealed class WorldRenderComposerTests
     }
 
     [Test]
+    public void MountainCloudsTest()
+    {
+        IGameDefinitionProvider definitions = new TestGameDefinitionProviderBuilder().Build();
+
+        WorldMap map = TestHelpers.SimpleMap(12, 12);
+
+        WorldPlayer human = TestHelpers.SimplePlayer(new WorldPlayerId(1), WorldRace.Human, map);
+
+        WorldMountain cloudedMountain = new(
+            Id: new WorldMountainId(1),
+            Footprint: new WorldFootprint(new WorldPosition(1, 1), 5, 5),
+            Race: WorldRace.Neutral,
+            Variant: new WorldObjectVariant(2));
+
+        WorldMountain clearMountain = new(
+            Id: new WorldMountainId(2),
+            Footprint: new WorldFootprint(new WorldPosition(0, 0), 5, 5),
+            Race: WorldRace.Neutral,
+            Variant: new WorldObjectVariant(3));
+
+        WorldMountain smallMountain = new(
+            Id: new WorldMountainId(3),
+            Footprint: new WorldFootprint(new WorldPosition(2, 0), 1, 1),
+            Race: WorldRace.Neutral,
+            Variant: new WorldObjectVariant(0));
+
+        WorldState state = new TestWorldEngineBuilder()
+            .WithMap(map)
+            .WithDefinition(TestHelpers.SimpleLord(human.LordId, human.Race, LordCategory.Warrior))
+            .WithPlayer(human)
+            .WithMountain(cloudedMountain)
+            .WithMountain(clearMountain)
+            .WithMountain(smallMountain)
+            .Build()
+            .State;
+
+        WorldRenderState renderState = Compose(state, definitions, fogEnabled: false, cursor: WorldCursor.Empty);
+
+        Assert.That(renderState.MapObjects, Is.EqualTo(new MapObject[]
+        {
+            new Mountain(
+                Position: new WorldPosition(2, 0),
+                Depth: 1416,
+                Footprint: smallMountain.Footprint,
+                AssetKey: new AssetSpriteKey.Mountain(WorldRace.Neutral, 1, 0)),
+            new Mountain(
+                Position: new WorldPosition(0, 0),
+                Depth: 2440,
+                Footprint: clearMountain.Footprint,
+                AssetKey: new AssetSpriteKey.Mountain(WorldRace.Neutral, 5, 3)),
+            new MountainCloud(
+                Position: new WorldPosition(1, 1),
+                Depth: 3459,
+                Footprint: cloudedMountain.Footprint,
+                MountainKey: new AssetSpriteKey.Mountain(WorldRace.Neutral, 5, 2),
+                Phase: 0.5289394550625884,
+                Layer: MountainCloudLayer.Back),
+            new Mountain(
+                Position: new WorldPosition(1, 1),
+                Depth: 3464,
+                Footprint: cloudedMountain.Footprint,
+                AssetKey: new AssetSpriteKey.Mountain(WorldRace.Neutral, 5, 2)),
+            new MountainCloud(
+                Position: new WorldPosition(1, 1),
+                Depth: 3466,
+                Footprint: cloudedMountain.Footprint,
+                MountainKey: new AssetSpriteKey.Mountain(WorldRace.Neutral, 5, 2),
+                Phase: 0.5289394550625884,
+                Layer: MountainCloudLayer.Front)
+        }));
+    }
+
+    [Test]
     public void BagTest()
     {
         IGameDefinitionProvider definitions = new TestGameDefinitionProviderBuilder().Build();
@@ -1266,6 +1340,7 @@ public sealed class WorldRenderComposerTests
             Highlights: new HighlightOverlay([]),
             SelectedPath: null,
             Animation: null,
+            TerrainExpansion: null,
             ObjectiveMarkers: [], AmbientSounds: [],
             Clouds: []);
 
@@ -1360,6 +1435,7 @@ public sealed class WorldRenderComposerTests
             Highlights: new HighlightOverlay([]),
             SelectedPath: null,
             Animation: null,
+            TerrainExpansion: null,
             ObjectiveMarkers: [], AmbientSounds: [],
             Clouds: []);
 
@@ -1454,6 +1530,7 @@ public sealed class WorldRenderComposerTests
             Highlights: new HighlightOverlay([]),
             SelectedPath: null,
             Animation: null,
+            TerrainExpansion: null,
             ObjectiveMarkers: [], AmbientSounds: [],
             Clouds: []);
 
@@ -2135,6 +2212,7 @@ public sealed class WorldRenderComposerTests
             Highlights: new HighlightOverlay([]),
             SelectedPath: null,
             Animation: null,
+            TerrainExpansion: null,
             ObjectiveMarkers: [], AmbientSounds: [],
             Clouds: []);
 
@@ -2388,6 +2466,7 @@ public sealed class WorldRenderComposerTests
             Highlights: new HighlightOverlay([]),
             SelectedPath: null,
             Animation: null,
+            TerrainExpansion: null,
             ObjectiveMarkers: [], AmbientSounds: [],
             Clouds: []);
 
@@ -2448,6 +2527,7 @@ public sealed class WorldRenderComposerTests
             Highlights: new HighlightOverlay([]),
             SelectedPath: null,
             Animation: null,
+            TerrainExpansion: null,
             ObjectiveMarkers: [], AmbientSounds: [],
             Clouds: []);
 
@@ -2656,6 +2736,7 @@ public sealed class WorldRenderComposerTests
             Highlights: new HighlightOverlay([]),
             SelectedPath: null,
             Animation: null,
+            TerrainExpansion: null,
             ObjectiveMarkers: [], AmbientSounds: [],
             Clouds: []);
 
@@ -2711,6 +2792,7 @@ public sealed class WorldRenderComposerTests
             Highlights: new HighlightOverlay([]),
             SelectedPath: null,
             Animation: null,
+            TerrainExpansion: null,
             ObjectiveMarkers: [], AmbientSounds: [],
             Clouds: []);
 
@@ -3339,8 +3421,7 @@ public sealed class WorldRenderComposerTests
         {
             ReachablePositions = [new WorldPosition(1, 0)],
             HoverTile = new WorldPosition(1, 0),
-            HoverTarget = new WorldPosition(1, 0),
-            HoverPath = new WorldPathSelection(new WorldPosition(1, 0), path, new WorldPath([]), Encounter: null)
+            Path = new WorldPathSelection(new WorldPosition(1, 0), path, new WorldPath([]), Encounter: null)
         };
 
         WorldRenderState renderState = Compose(state, definitions, fogEnabled: false, cursor: cursor);
@@ -3404,8 +3485,7 @@ public sealed class WorldRenderComposerTests
             ReachablePositions = [new WorldPosition(1, 0), new WorldPosition(2, 0)],
             HoverObject = new WorldPosition(2, 0),
             HoverTile = new WorldPosition(1, 0),
-            HoverTarget = new WorldPosition(1, 0),
-            HoverPath = new WorldPathSelection(new WorldPosition(1, 0), path, new WorldPath([]), Encounter: null)
+            Path = new WorldPathSelection(new WorldPosition(1, 0), path, new WorldPath([]), Encounter: null)
         };
 
         WorldRenderState renderState = Compose(state, definitions, fogEnabled: false, cursor: cursor);
@@ -3448,7 +3528,7 @@ public sealed class WorldRenderComposerTests
             .Build()
             .State;
 
-        WorldCursor cursor = WorldCursor.Empty.SelectStack(stack.Id) with { HoverTile = new WorldPosition(2, 0), HoverTarget = new WorldPosition(2, 0) };
+        WorldCursor cursor = WorldCursor.Empty.SelectStack(stack.Id) with { HoverTile = new WorldPosition(2, 0) };
 
         WorldRenderState renderState = Compose(state, definitions, fogEnabled: false, cursor: cursor);
 
@@ -3491,7 +3571,7 @@ public sealed class WorldRenderComposerTests
             .Build()
             .State;
 
-        WorldCursor cursor = WorldCursor.Empty.SelectStack(stack.Id) with { HoverTile = new WorldPosition(2, 0), HoverTarget = new WorldPosition(2, 0) };
+        WorldCursor cursor = WorldCursor.Empty.SelectStack(stack.Id) with { HoverTile = new WorldPosition(2, 0) };
 
         WorldRenderState renderState = Compose(state, definitions, fogEnabled: true, cursor: cursor);
 
@@ -3777,7 +3857,7 @@ public sealed class WorldRenderComposerTests
     }
 
     [Test]
-    public void HoverPathTest()
+    public void PathTest()
     {
         (WorldState state, IGameDefinitionProvider definitions, WorldStackId stackId) = BuildStackWorld(new WorldUnitId("leader"));
 
@@ -3788,7 +3868,7 @@ public sealed class WorldRenderComposerTests
 
         WorldCursor cursor = WorldCursor.Empty.SelectStack(stackId) with
         {
-            HoverPath = new WorldPathSelection(new WorldPosition(3, 1), path, new WorldPath([]), Encounter: null)
+            Path = new WorldPathSelection(new WorldPosition(3, 1), path, new WorldPath([]), Encounter: null)
         };
 
         WorldRenderState renderState = Compose(state, definitions, fogEnabled: true, cursor: cursor);
@@ -3800,7 +3880,7 @@ public sealed class WorldRenderComposerTests
     }
 
     [Test]
-    public void InterceptedHoverPathTest()
+    public void InterceptedPathTest()
     {
         (WorldState state, IGameDefinitionProvider definitions, WorldStackId stackId) = BuildStackWorld(new WorldUnitId("leader"));
 
@@ -3814,7 +3894,7 @@ public sealed class WorldRenderComposerTests
 
         WorldCursor cursor = WorldCursor.Empty.SelectStack(stackId) with
         {
-            HoverPath = new WorldPathSelection(new WorldPosition(4, 1), path, remainder, new WorldPathEncounter.Battle(new WorldPosition(3, 0)))
+            Path = new WorldPathSelection(new WorldPosition(4, 1), path, remainder, new WorldPathEncounter.Battle(new WorldPosition(3, 0)))
         };
 
         WorldRenderState renderState = Compose(state, definitions, fogEnabled: true, cursor: cursor);
@@ -3828,7 +3908,7 @@ public sealed class WorldRenderComposerTests
     }
 
     [Test]
-    public void AttackHoverPathTest()
+    public void AttackPathTest()
     {
         (WorldState state, IGameDefinitionProvider definitions, WorldStackId stackId) = BuildStackWorld(new WorldUnitId("leader"));
 
@@ -3841,7 +3921,7 @@ public sealed class WorldRenderComposerTests
 
         WorldCursor cursor = WorldCursor.Empty.SelectStack(stackId) with
         {
-            HoverPath = new WorldPathSelection(new WorldPosition(3, 1), path, remainder, new WorldPathEncounter.Battle(new WorldPosition(3, 1)))
+            Path = new WorldPathSelection(new WorldPosition(3, 1), path, remainder, new WorldPathEncounter.Battle(new WorldPosition(3, 1)))
         };
 
         WorldRenderState renderState = Compose(state, definitions, fogEnabled: true, cursor: cursor);
@@ -3857,7 +3937,7 @@ public sealed class WorldRenderComposerTests
     }
 
     [Test]
-    public void BagHoverPathTest()
+    public void BagPathTest()
     {
         (WorldState state, IGameDefinitionProvider definitions, WorldStackId stackId) = BuildStackWorld(new WorldUnitId("leader"));
 
@@ -3870,7 +3950,7 @@ public sealed class WorldRenderComposerTests
 
         WorldCursor cursor = WorldCursor.Empty.SelectStack(stackId) with
         {
-            HoverPath = new WorldPathSelection(new WorldPosition(3, 1), path, remainder, new WorldPathEncounter.Bag(new WorldBagId("Bag")))
+            Path = new WorldPathSelection(new WorldPosition(3, 1), path, remainder, new WorldPathEncounter.Bag(new WorldBagId("Bag")))
         };
 
         WorldRenderState renderState = Compose(state, definitions, fogEnabled: true, cursor: cursor);
@@ -4306,6 +4386,30 @@ public sealed class WorldRenderComposerTests
     }
 
     [Test]
+    public void PlayingEventTest()
+    {
+        (WorldState state, IGameDefinitionProvider definitions, WorldStackId stackId) = BuildStackWorld(new WorldUnitId("leader"));
+
+        WorldPath path = new([
+            new WorldPathSegment(new WorldPosition(1, 1), new WorldPosition(2, 1), Cost: 2, Turn: 0)
+        ]);
+
+        WorldCursor cursor = WorldCursor.Empty.SelectStack(stackId) with
+        {
+            ReachablePositions = [new WorldPosition(0, 1), new WorldPosition(2, 1)],
+            Path = new WorldPathSelection(new WorldPosition(2, 1), path, new WorldPath([]), Encounter: null)
+        };
+
+        WorldRenderRequest request = MakeSceneRequest(state, fogEnabled: false, cursor: cursor) with { IsPlayingEvent = true };
+        WorldRenderComposer composer = new(definitions, GameScenarioProvider.Empty, new TestMetadataProviderBuilder().Build());
+        WorldRenderState renderState = composer.Compose(request);
+
+        Assert.That(renderState.Reach, Is.Null);
+        Assert.That(renderState.SelectedPath, Is.Null);
+        Assert.That(renderState.Highlights, Is.EqualTo(new HighlightOverlay([])));
+    }
+
+    [Test]
     public void HoverOutsideReachTest()
     {
         (WorldState state, IGameDefinitionProvider definitions, WorldStackId stackId) = BuildStackWorld(new WorldUnitId("leader"));
@@ -4314,8 +4418,7 @@ public sealed class WorldRenderComposerTests
         {
             ReachablePositions = [new WorldPosition(0, 1)],
             HoverObject = new WorldPosition(1, 1),
-            HoverTile = new WorldPosition(2, 1),
-            HoverTarget = new WorldPosition(2, 1)
+            HoverTile = new WorldPosition(2, 1)
         };
 
         WorldRenderState renderState = Compose(state, definitions, fogEnabled: false, cursor: cursor);
@@ -4449,7 +4552,7 @@ public sealed class WorldRenderComposerTests
 
         WorldCursor cursor = WorldCursor.Empty.SelectStack(stack.Id) with
         {
-            HoverPath = new WorldPathSelection(city.Entrance, path, remainder, new WorldPathEncounter.Battle(city.Entrance))
+            Path = new WorldPathSelection(city.Entrance, path, remainder, new WorldPathEncounter.Battle(city.Entrance))
         };
 
         WorldRenderState renderState = Compose(state, definitions, fogEnabled: false, cursor: cursor);
@@ -4500,12 +4603,13 @@ public sealed class WorldRenderComposerTests
             .Build()
             .State;
 
-        WorldAnimationState.TerrainExpansion animation = new(map);
         WorldRenderComposer composer = new(definitions, GameScenarioProvider.Empty, new TestMetadataProviderBuilder().Build());
-        WorldRenderState first = composer.Compose(MakeSceneRequest(state with { Map = expandedMap }, fogEnabled: true, cursor: WorldCursor.Empty) with { Animation = animation });
-        WorldRenderState second = composer.Compose(MakeSceneRequest(state with { Map = expandedMap }, fogEnabled: true, cursor: WorldCursor.Empty with { HoverTile = new WorldPosition(2, 1) }) with { Animation = animation });
+        WorldRenderState initial = composer.Compose(MakeSceneRequest(state, fogEnabled: true, cursor: WorldCursor.Empty));
+        WorldRenderState first = composer.Compose(MakeSceneRequest(state with { Map = expandedMap }, fogEnabled: true, cursor: WorldCursor.Empty));
+        WorldRenderState second = composer.Compose(MakeSceneRequest(state with { Map = expandedMap }, fogEnabled: true, cursor: WorldCursor.Empty with { HoverTile = new WorldPosition(2, 1) }));
 
-        Assert.That(first.Animation, Is.EqualTo(new TerrainExpansion(
+        Assert.That(initial.TerrainExpansion, Is.Null);
+        Assert.That(first.TerrainExpansion, Is.EqualTo(new TerrainExpansionAnimation(
             new AssetSoundKey.Occupy(),
             new MapTerrain(
                 map,
@@ -4582,6 +4686,118 @@ public sealed class WorldRenderComposerTests
             [],
             TimeSpan.FromMilliseconds(500.0),
             TimeSpan.FromMilliseconds(974.0))));
-        Assert.That(second.Animation, Is.SameAs(first.Animation));
+        Assert.That(second.TerrainExpansion, Is.SameAs(first.TerrainExpansion));
+    }
+
+    [Test]
+    public void RiotHighlightsTest()
+    {
+        IGameDefinitionProvider definitions = new TestGameDefinitionProviderBuilder().Build();
+
+        WorldMap map = TestHelpers.SimpleMap(10, 10);
+
+        WorldPlayer human = TestHelpers.SimplePlayer(new WorldPlayerId(1), WorldRace.Human, map) with
+        {
+            FogOfWar = TestHelpers.BuildFogOfWar([
+                "..........",
+                "..........",
+                "..........",
+                "..........",
+                "..........",
+                "??????????",
+                "??????????",
+                "??????????",
+                "??????????",
+                "??????????"
+            ])
+        };
+
+        WorldCity riotCity = new(
+            Id: new WorldFortificationId("c1"),
+            NameTextId: new ScenarioTextId("Name"),
+            DefinitionId: new WorldCityDefinitionId(WorldRace.Human, 2),
+            OwnerId: human.Id,
+            SubraceId: TestHelpers.NeutralSubrace.Id,
+            Footprint: new WorldFootprint(new WorldPosition(0, 0), 4, 4),
+            Garrison: UnitGrid<WorldUnit>.Empty,
+            Inventory: WorldInventory.Empty,
+            AiPriority: 3,
+            RiotTurns: 2,
+            GrowthTurn: 0);
+
+        WorldCity calmCity = new(
+            Id: new WorldFortificationId("c2"),
+            NameTextId: new ScenarioTextId("Name"),
+            DefinitionId: new WorldCityDefinitionId(WorldRace.Human, 2),
+            OwnerId: human.Id,
+            SubraceId: TestHelpers.NeutralSubrace.Id,
+            Footprint: new WorldFootprint(new WorldPosition(5, 0), 4, 4),
+            Garrison: UnitGrid<WorldUnit>.Empty,
+            Inventory: WorldInventory.Empty,
+            AiPriority: 3,
+            RiotTurns: 0,
+            GrowthTurn: 0);
+
+        WorldCity foggedRiotCity = new(
+            Id: new WorldFortificationId("c3"),
+            NameTextId: new ScenarioTextId("Name"),
+            DefinitionId: new WorldCityDefinitionId(WorldRace.Human, 2),
+            OwnerId: human.Id,
+            SubraceId: TestHelpers.NeutralSubrace.Id,
+            Footprint: new WorldFootprint(new WorldPosition(5, 5), 4, 4),
+            Garrison: UnitGrid<WorldUnit>.Empty,
+            Inventory: WorldInventory.Empty,
+            AiPriority: 3,
+            RiotTurns: 3,
+            GrowthTurn: 0);
+
+        WorldState state = new TestWorldEngineBuilder()
+            .WithMap(map)
+            .WithDefinition(TestHelpers.SimpleLord(human.LordId, human.Race, LordCategory.Warrior))
+            .WithPlayer(human)
+            .WithDefinition(TestHelpers.SimpleCityDefinition(new WorldCityDefinitionId(WorldRace.Human, 2), WorldResourceSet.Empty))
+            .WithCity(riotCity)
+            .WithCity(calmCity)
+            .WithCity(foggedRiotCity)
+            .Build()
+            .State;
+
+        WorldRenderState renderState = Compose(state, definitions, fogEnabled: true, cursor: WorldCursor.Empty);
+
+        Assert.That(renderState.Highlights, Is.EqualTo(new HighlightOverlay(
+        [
+            new Highlight(
+                new Fortification(
+                    Position: new WorldPosition(3, 3),
+                    Depth: 1949,
+                    Footprint: riotCity.Footprint,
+                    AssetKey: new AssetAnimationKey.City(2)),
+                Theme.World.Highlight.RiotColor)
+        ])));
+    }
+
+    [Test]
+    public void NextTurnPathTest()
+    {
+        (WorldState state, IGameDefinitionProvider definitions, WorldStackId stackId) = BuildStackWorld(new WorldUnitId("leader"));
+
+        WorldPath path = new([
+            new WorldPathSegment(new WorldPosition(1, 1), new WorldPosition(2, 1), Cost: 2, Turn: 0),
+            new WorldPathSegment(new WorldPosition(2, 1), new WorldPosition(3, 1), Cost: 3, Turn: 1),
+            new WorldPathSegment(new WorldPosition(3, 1), new WorldPosition(4, 1), Cost: 3, Turn: 2)
+        ]);
+
+        WorldCursor cursor = WorldCursor.Empty.SelectStack(stackId) with
+        {
+            Path = new WorldPathSelection(new WorldPosition(4, 1), path, new WorldPath([]), Encounter: null)
+        };
+
+        WorldRenderState renderState = Compose(state, definitions, fogEnabled: true, cursor: cursor);
+
+        Assert.That(renderState.SelectedPath, Is.EqualTo(new PathOverlay(new WorldPosition(1, 1), [
+            new PathStep(new WorldPosition(2, 1), Theme.World.Path.ValidInnerColor, Theme.World.Path.ValidOuterColor, "2"),
+            new PathStep(new WorldPosition(3, 1), Theme.World.Path.UnreachedInnerColor, Theme.World.Path.UnreachedOuterColor, "5"),
+            new PathStep(new WorldPosition(4, 1), Theme.World.Path.UnreachedInnerColor, Theme.World.Path.UnreachedOuterColor, "8")
+        ])));
     }
 }

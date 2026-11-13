@@ -21,11 +21,6 @@ internal sealed partial class WorldEventQueue
 
     Empty IWorldEventVisitor<EngineStep<WorldState, WorldEvent>, Empty>.Visit(WorldStackMovedEvent ev, EngineStep<WorldState, WorldEvent> step)
     {
-        if (ev.NewMovementPoints <= 0)
-        {
-            queue.Add(new Entry.StackExhaust(step.NewState, ev.StackId));
-        }
-
         return Empty.Value;
     }
 
@@ -133,11 +128,6 @@ internal sealed partial class WorldEventQueue
 
     Empty IWorldEventVisitor<EngineStep<WorldState, WorldEvent>, Empty>.Visit(WorldCityRiotEndedEvent ev, EngineStep<WorldState, WorldEvent> step)
     {
-        if (step.NewState.Fortifications.TryGetValue(ev.CityId, out WorldFortification? fortification))
-        {
-            queue.Add(new Entry.CityRiotEnd(step.NewState, fortification.Entrance));
-        }
-
         return Empty.Value;
     }
 
@@ -181,10 +171,7 @@ internal sealed partial class WorldEventQueue
     {
         if (step.NewState.Fortifications.TryGetValue(ev.FortificationId, out WorldFortification? fortification))
         {
-            if (!TryAddTerrainExpansion(step, fortification.Entrance, ev.NewOwnerId))
-            {
-                queue.Add(new Entry.Pause(step.NewState, fortification.Entrance, ev.NewOwnerId, PauseDurationDefault));
-            }
+            queue.Add(new Entry.Pause(step.NewState, fortification.Entrance, ev.NewOwnerId, PauseDurationDefault));
         }
 
         return Empty.Value;
@@ -256,13 +243,6 @@ internal sealed partial class WorldEventQueue
 
     Empty IWorldEventVisitor<EngineStep<WorldState, WorldEvent>, Empty>.Visit(WorldStackMovementConsumedEvent ev, EngineStep<WorldState, WorldEvent> step)
     {
-        WorldStack stack = step.OldState.Stacks[ev.StackId];
-
-        if (stack.MovementPoints > 0 && ev.NewMovementPoints <= 0)
-        {
-            queue.Add(new Entry.StackExhaust(step.NewState, ev.StackId));
-        }
-
         return Empty.Value;
     }
 
@@ -276,14 +256,6 @@ internal sealed partial class WorldEventQueue
         if (!step.NewState.Players[ev.PlayerId].IsAi)
         {
             AddHotseatTurn(step.NewState, ev.PlayerId);
-        }
-
-        WorldPlan plan = WorldPlan.For(step.NewState);
-        WorldCapital? capital = plan.GetCapital(ev.PlayerId);
-
-        if (capital is not null)
-        {
-            TryAddTerrainExpansion(step, capital.Entrance, ev.PlayerId);
         }
 
         return Empty.Value;
@@ -488,16 +460,6 @@ internal sealed partial class WorldEventQueue
 
     Empty IWorldEventVisitor<EngineStep<WorldState, WorldEvent>, Empty>.Visit(WorldScenarioEventTriggeringEvent ev, EngineStep<WorldState, WorldEvent> step)
     {
-        ScenarioEventDefinition definition = scenario.GetEvent(ev.EventId);
-        ScenarioEventChangeTerrainEffect? effect = definition.Effects.OfType<ScenarioEventChangeTerrainEffect>().FirstOrDefault();
-
-        if (effect is not null)
-        {
-            ScenarioLocationDefinition location = scenario.GetLocation(effect.Location);
-
-            TryAddTerrainExpansion(step, location.Position, playerId: null);
-        }
-
         return Empty.Value;
     }
 
@@ -727,10 +689,7 @@ internal sealed partial class WorldEventQueue
 
     Empty IWorldEventVisitor<EngineStep<WorldState, WorldEvent>, Empty>.Visit(WorldRodCreatedEvent ev, EngineStep<WorldState, WorldEvent> step)
     {
-        if (!TryAddTerrainExpansion(step, ev.Position, ev.PlayerId))
-        {
-            queue.Add(new Entry.Pause(step.NewState, ev.Position, ev.PlayerId, PauseDurationDefault));
-        }
+        queue.Add(new Entry.Pause(step.NewState, ev.Position, ev.PlayerId, PauseDurationDefault));
 
         return Empty.Value;
     }
@@ -809,20 +768,6 @@ internal sealed partial class WorldEventQueue
         foreach (WorldDiplomacyProposal proposal in state.Players[playerId].IncomingDiplomacyProposals)
         {
             queue.Add(new Entry.DiplomacyProposal(state, proposal));
-        }
-    }
-
-    private bool TryAddTerrainExpansion(EngineStep<WorldState, WorldEvent> step, WorldPosition position, WorldPlayerId? playerId)
-    {
-        if (step.OldState.Map != step.NewState.Map)
-        {
-            queue.Add(new Entry.TerrainExpansion(step.NewState, step.OldState.Map, position, playerId));
-
-            return true;
-        }
-        else
-        {
-            return false;
         }
     }
 

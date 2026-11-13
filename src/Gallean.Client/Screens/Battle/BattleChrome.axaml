@@ -16,12 +16,12 @@
   </Style>
 
   <Style Selector=":is(TextBlock).feedback-label">
-    <Setter Property="local:OutlinedTextBlock.Outline" Value="{StaticResource TextOutlineBrush}" />
-    <Setter Property="local:OutlinedTextBlock.OutlineThickness" Value="1" />
     <Setter Property="Margin" Value="4,0" />
     <Setter Property="HorizontalAlignment" Value="Center" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="TextAlignment" Value="Center" />
+    <Setter Property="local:OutlinedTextBlock.Outline" Value="{StaticResource TextOutlineBrush}" />
+    <Setter Property="local:OutlinedTextBlock.OutlineThickness" Value="1" />
   </Style>
   <Style Selector="Border.feedback.damage">
     <Setter Property="Background" Value="{StaticResource BattleFeedbackDamageOverlayBrush}" />
@@ -89,20 +89,8 @@
     <Setter Property="Margin" Value="-7" />
   </Style>
 
-  <Style Selector="Border.hotkey-pill">
-    <Setter Property="Padding" Value="9,1" />
-    <Setter Property="HorizontalAlignment" Value="Center" />
-    <Setter Property="Background" Value="{StaticResource HudHotkeyPillBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource HudHotkeyPillBorderBrush}" />
-    <Setter Property="BorderThickness" Value="2" />
-    <Setter Property="CornerRadius" Value="12" />
-  </Style>
-  <Style Selector="Border.hotkey-pill TextBlock">
-    <Setter Property="Foreground" Value="{StaticResource HudHotkeyTextBrush}" />
-    <Setter Property="FontSize" Value="{StaticResource FontSizeSm}" />
-  </Style>
-
   <Style Selector="StackPanel.action-row">
+    <Setter Property="MinHeight" Value="70" />
     <Setter Property="Orientation" Value="Horizontal" />
     <Setter Property="Spacing" Value="12" />
   </Style>
@@ -198,9 +186,6 @@
         <ContentPresenter Content="{TemplateBinding Content}" />
       </ControlTemplate>
     </Setter>
-  </Style>
-  <Style Selector="ToolTip.action-caption Border.hotkey-pill">
-    <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
   <Style Selector="local|OutlinedTextBlock.action-caption">
     <Setter Property="VerticalAlignment" Value="Center" />

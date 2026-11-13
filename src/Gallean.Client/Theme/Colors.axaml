@@ -102,9 +102,27 @@
   <SolidColorBrush x:Key="HudInkBrush" Color="{x:Static local:Theme+Hud.InkColor}" />
   <SolidColorBrush x:Key="HudHoverInkBrush" Color="{DynamicResource AccentColor}" />
   <SolidColorBrush x:Key="HudDisabledInkBrush" Color="{x:Static local:Theme+Hud.DisabledInkColor}" />
-  <SolidColorBrush x:Key="HudHotkeyTextBrush" Color="{x:Static local:Theme+Hud.HotkeyTextColor}" />
-  <SolidColorBrush x:Key="HudHotkeyPillBrush" Color="{x:Static local:Theme+Hud.HotkeyPillColor}" />
-  <SolidColorBrush x:Key="HudHotkeyPillBorderBrush" Color="{x:Static local:Theme+Hud.HotkeyPillBorderColor}" />
+  <SolidColorBrush x:Key="KeycapFaceTopBrush" Color="{x:Static local:Theme+Keycap.FaceTopColor}" />
+  <SolidColorBrush x:Key="KeycapFaceBottomBrush" Color="{x:Static local:Theme+Keycap.FaceBottomColor}" />
+  <SolidColorBrush x:Key="KeycapHoverFaceTopBrush" Color="{x:Static local:Theme+Keycap.HoverFaceTopColor}" />
+  <SolidColorBrush x:Key="KeycapHoverFaceBottomBrush" Color="{x:Static local:Theme+Keycap.HoverFaceBottomColor}" />
+  <SolidColorBrush x:Key="KeycapEdgeLightBrush" Color="{x:Static local:Theme+Keycap.EdgeLightColor}" />
+  <SolidColorBrush x:Key="KeycapEdgeBrush" Color="{x:Static local:Theme+Keycap.EdgeColor}" />
+  <SolidColorBrush x:Key="KeycapEdgeDarkBrush" Color="{x:Static local:Theme+Keycap.EdgeDarkColor}" />
+  <SolidColorBrush x:Key="KeycapTextBrush" Color="{x:Static local:Theme+Keycap.TextColor}" />
+  <LinearGradientBrush x:Key="KeycapFaceGradientBrush" StartPoint="50%,0%" EndPoint="50%,100%">
+    <GradientStop Offset="0" Color="{x:Static local:Theme+Keycap.FaceTopColor}" />
+    <GradientStop Offset="1" Color="{x:Static local:Theme+Keycap.FaceBottomColor}" />
+  </LinearGradientBrush>
+  <LinearGradientBrush x:Key="KeycapHoverFaceGradientBrush" StartPoint="50%,0%" EndPoint="50%,100%">
+    <GradientStop Offset="0" Color="{x:Static local:Theme+Keycap.HoverFaceTopColor}" />
+    <GradientStop Offset="1" Color="{x:Static local:Theme+Keycap.HoverFaceBottomColor}" />
+  </LinearGradientBrush>
+  <LinearGradientBrush x:Key="KeycapEdgeGradientBrush" StartPoint="50%,0%" EndPoint="50%,100%">
+    <GradientStop Offset="0" Color="{x:Static local:Theme+Keycap.EdgeLightColor}" />
+    <GradientStop Offset="0.2" Color="{x:Static local:Theme+Keycap.EdgeColor}" />
+    <GradientStop Offset="1" Color="{x:Static local:Theme+Keycap.EdgeDarkColor}" />
+  </LinearGradientBrush>
   <SolidColorBrush x:Key="HudPlateShadowBrush" Color="{x:Static local:Theme+Hud.PlateShadowColor}" />
   <SolidColorBrush x:Key="DevToolsLabelBrush" Color="{x:Static local:Theme+DevTools.LabelColor}" />
 
@@ -219,6 +237,7 @@
   <SolidColorBrush x:Key="LogoShadowBrush" Color="{x:Static local:Theme+Logo.ShadowColor}" />
 
   <SolidColorBrush x:Key="ScenarioSelectBackdropBrush" Color="{x:Static local:Theme+ScenarioSelect.BackdropColor}" />
+  <SolidColorBrush x:Key="ScenarioSelectSmokeBrush" Color="{x:Static local:Theme+ScenarioSelect.SmokeColor}" />
   <SolidColorBrush x:Key="ScenarioSelectDividerBrush" Color="{DynamicResource AccentColor}" Opacity="0.37" />
   <SolidColorBrush x:Key="ScenarioSelectRowHoverBrush" Color="{DynamicResource AccentColor}" Opacity="0.11" />
   <SolidColorBrush x:Key="ScenarioSelectRowSelectedBrush" Color="{DynamicResource AccentColor}" Opacity="0.22" />
@@ -273,9 +292,6 @@
   <SolidColorBrush x:Key="TabBarOrnamentBrush" Color="{x:Static local:Theme+TabBar.OrnamentColor}" />
   <SolidColorBrush x:Key="TabBarPatternBrush" Color="{x:Static local:Theme+TabBar.PatternColor}" />
   <SolidColorBrush x:Key="TabBarPatternDarkBrush" Color="{x:Static local:Theme+TabBar.PatternDarkColor}" />
-  <SolidColorBrush x:Key="TabBarHotkeyFaceBrush" Color="{x:Static local:Theme+TabBar.HotkeyFaceColor}" />
-  <SolidColorBrush x:Key="TabBarHotkeyHoverFaceBrush" Color="{x:Static local:Theme+TabBar.HotkeyHoverFaceColor}" />
-  <SolidColorBrush x:Key="TabBarHotkeyTextBrush" Color="{x:Static local:Theme+TabBar.HotkeyTextColor}" />
   <SolidColorBrush x:Key="TabBarOrnamentShadowBrush" Color="{x:Static local:Theme+TabBar.OrnamentShadowColor}" />
   <LinearGradientBrush x:Key="TabBarBackgroundGradientBrush" StartPoint="0%,50%" EndPoint="100%,50%">
     <GradientStop Offset="0" Color="{x:Static local:Theme+TabBar.BackgroundColor}" />
@@ -939,6 +955,7 @@
   <SolidColorBrush x:Key="WorldHighlightSelectedBrush" Color="{x:Static local:Theme+World+Highlight.SelectedColor}" />
   <SolidColorBrush x:Key="WorldHighlightExhaustedBrush" Color="{x:Static local:Theme+World+Highlight.ExhaustedColor}" />
   <SolidColorBrush x:Key="WorldHighlightHostileBrush" Color="{x:Static local:Theme+World+Highlight.HostileColor}" />
+  <SolidColorBrush x:Key="WorldHighlightRiotBrush" Color="{x:Static local:Theme+World+Highlight.RiotColor}" />
 
   <SolidColorBrush x:Key="WorldReachFillBrush" Color="{x:Static local:Theme+World+Reach.FillColor}" />
   <SolidColorBrush x:Key="WorldReachFeatherBrush" Color="{x:Static local:Theme+World+Reach.FeatherColor}" />
@@ -965,6 +982,8 @@
   <SolidColorBrush x:Key="WorldWaterSkyBrush" Color="{x:Static local:Theme+World+Water.SkyColor}" />
   <SolidColorBrush x:Key="WorldWaterFoamBrush" Color="{x:Static local:Theme+World+Water.FoamColor}" />
   <SolidColorBrush x:Key="WorldWaterSunBrush" Color="{x:Static local:Theme+World+Water.SunColor}" />
+  <SolidColorBrush x:Key="WorldMountainCloudLightBrush" Color="{x:Static local:Theme+World+MountainCloud.LightColor}" />
+  <SolidColorBrush x:Key="WorldMountainCloudShadowBrush" Color="{x:Static local:Theme+World+MountainCloud.ShadowColor}" />
 
   <SolidColorBrush x:Key="WorldRaceHumanBrush" Color="{x:Static local:Theme+World+Race.HumanColor}" />
   <SolidColorBrush x:Key="WorldRaceUndeadBrush" Color="{x:Static local:Theme+World+Race.UndeadColor}" />

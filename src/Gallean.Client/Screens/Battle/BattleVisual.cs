@@ -85,7 +85,7 @@ internal sealed class BattleVisual : AbstractAnimatedVisual
                 }
             }
         }
-        else if (properties.IsLeftButtonPressed)
+        else if (properties.IsLeftButtonPressed && e.Pointer.Type != PointerType.Touch)
         {
             if (tile is not null)
             {
@@ -337,7 +337,7 @@ internal sealed class BattleVisual : AbstractAnimatedVisual
         }
     }
 
-    private BattleGridTile? HitTestPointer(PointerEventArgs e)
+    internal BattleGridTile? HitTestPointer(PointerEventArgs e)
     {
         Point scene = BattleRenderLayout.ScreenToScene(e.GetPosition(this), Bounds.Width, Bounds.Height);
 

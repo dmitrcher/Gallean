@@ -7,7 +7,8 @@ namespace Gallean.Client;
 internal sealed partial class AssetPackErrorViewModel(
     InstalledAssetPackException exception,
     string gameDirectory,
-    IControlledApplicationLifetime lifetime)
+    IControlledApplicationLifetime? lifetime,
+    Action? restart = null)
     : ObservableObject
 {
     public string Title { get; } = FormatTitle(exception);
@@ -16,9 +17,29 @@ internal sealed partial class AssetPackErrorViewModel(
     public Uri GetPackUri { get; } = new("https://gallean.org/go/1");
 
     [RelayCommand]
+    private void Restart()
+    {
+        if (restart is not null)
+        {
+            restart();
+        }
+        else
+        {
+            Exit();
+        }
+    }
+
+    [RelayCommand]
     private void Exit()
     {
-        lifetime.Shutdown();
+        if (lifetime is not null)
+        {
+            lifetime.Shutdown();
+        }
+        else
+        {
+            ClientPlatform.Exit?.Invoke();
+        }
     }
 
     private static string FormatTitle(InstalledAssetPackException exception)
@@ -27,8 +48,7 @@ internal sealed partial class AssetPackErrorViewModel(
         {
             InstalledAssetPackNotFoundException => Tr("Asset pack is required"),
             InstalledAssetPackIncompatibleException => Tr("Incompatible asset pack"),
-            InstalledAssetPackNotEnhancedException => Tr("Unexpected asset pack"),
-            _ => throw new ArgumentOutOfRangeException(nameof(exception), exception, null)
+            InstalledAssetPackNotEnhancedException => Tr("Unexpected asset pack")
         };
     }
 
@@ -37,12 +57,11 @@ internal sealed partial class AssetPackErrorViewModel(
         return exception switch
         {
             InstalledAssetPackNotFoundException =>
-                Tr("Gallean is an open-source implementation of Disciples II game mechanics. To play, you need an asset pack built from the original game assets."),
+                Tr("Gallean is an open-source implementation of Disciples II game mechanics. To play, you need an asset pack."),
             InstalledAssetPackIncompatibleException =>
                 Tr("The installed asset pack was made for a different version of Gallean. Replace it with a pack made for this version."),
             InstalledAssetPackNotEnhancedException =>
-                Tr("The installed asset pack does not include the enhanced assets. Replace it with an appropriate pack."),
-            _ => throw new ArgumentOutOfRangeException(nameof(exception), exception, null)
+                Tr("The installed asset pack does not include the enhanced assets. Replace it with an appropriate pack.")
         };
     }
 }

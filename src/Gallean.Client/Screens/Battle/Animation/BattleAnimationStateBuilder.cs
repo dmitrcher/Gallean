@@ -72,7 +72,11 @@ internal sealed partial class BattleAnimationStateBuilder(
         {
             battleEvent.Accept(this, Empty.Value);
 
-            if (battleEvent is BattleUnitAttackMissedEvent && currentAttack is { Origin: AttackOrigin.Secondary })
+            if (IsSecondaryMissEvent(battleEvent))
+            {
+                continue;
+            }
+            else if (IsThawSkipEvent(battleEvent))
             {
                 continue;
             }
@@ -139,6 +143,19 @@ internal sealed partial class BattleAnimationStateBuilder(
             animations,
             BuildShakes(),
             rate);
+
+        bool IsSecondaryMissEvent(BattleEvent battleEvent)
+        {
+            return battleEvent is BattleUnitAttackMissedEvent &&
+                   currentAttack is { Origin: AttackOrigin.Secondary };
+        }
+
+        bool IsThawSkipEvent(BattleEvent battleEvent)
+        {
+            return battleEvent is BattleUnitTurnSkippedEvent skippedEvent &&
+                   timelines.TryGetValue(skippedEvent.UnitId, out UnitTimeline? timeline) &&
+                   timeline.Status is [.., { Frozen: false }];
+        }
     }
 
     private static IReadOnlyList<BattleAnimationState.BodyEntry> BuildBody(UnitTimeline timeline)
@@ -220,7 +237,7 @@ internal sealed partial class BattleAnimationStateBuilder(
         {
             ItemDefinition item = definitions.GetItem(ev.ItemId);
 
-            BattleSide targetSide = ev.Target.Accept(AttackTargetSideVisitor.Instance, timelines);
+            BattleSide targetSide = GetTargetSide(ev.Target);
 
             BeginItem(timeline, item, targetSide);
         }
@@ -246,7 +263,7 @@ internal sealed partial class BattleAnimationStateBuilder(
     {
         if (timelines.TryGetValue(ev.AttackerId, out UnitTimeline? attacker))
         {
-            BattleSide targetSide = ev.Target.Accept(AttackTargetSideVisitor.Instance, timelines);
+            BattleSide targetSide = GetTargetSide(ev.Target);
 
             BeginAttack(attacker, definitions.GetAttack(ev.AttackIds[0]), targetSide);
         }
@@ -732,6 +749,22 @@ internal sealed partial class BattleAnimationStateBuilder(
     Empty IBattleEventVisitor<Empty, Empty>.Visit(BattleUnitWardExpiredEvent ev, Empty context)
     {
         return Empty.Value;
+    }
+
+    private BattleSide GetTargetSide(BattleAttackTarget target)
+    {
+        return target switch
+        {
+            BattleAttackUnitTarget unitTarget => GetUnitSide(unitTarget.UnitId),
+            BattleAttackTileTarget tileTarget => tileTarget.Side
+        };
+    }
+
+    private BattleSide GetUnitSide(BattleUnitId unitId)
+    {
+        UnitTimeline timeline = timelines[unitId];
+
+        return timeline.Unit.Footprint.Side;
     }
 
     private Attack BeginAttack(UnitTimeline attacker, UnitAttackDefinition definition, BattleSide targetSide)

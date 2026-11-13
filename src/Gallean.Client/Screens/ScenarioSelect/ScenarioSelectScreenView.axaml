@@ -29,7 +29,7 @@
       <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
     </Style>
     <Style Selector="TextBlock.details-value">
-      <Setter Property="Margin" Value="0,0,0,8" />
+      <Setter Property="Margin" Value="0,1,0,7" />
       <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
       <Setter Property="TextWrapping" Value="Wrap" />
@@ -85,14 +85,13 @@
         </ListBox.ItemTemplate>
       </ListBox>
 
-      <Grid Grid.Row="4" Grid.Column="0" Classes="focus-group" ColumnDefinitions="*,*" Margin="0,20,0,0">
+      <Grid Grid.Row="4" Grid.Column="0" Classes="focus-group pill-group" ColumnDefinitions="*,*" Margin="0,20,0,0">
         <Button Grid.Column="0"
                 Classes="pill"
                 local:PlateChrome.TextureSeed="1"
                 Content="{local:Text 'Back'}"
-                Command="{Binding Game.ShowMainMenuCommand}"
-                Margin="0,0,6,0" />
-        <Button Grid.Column="1" Classes="pill primary" local:PlateChrome.TextureSeed="2" Content="{local:Text 'Start game'}" Command="{Binding StartCommand}" Margin="6,0,0,0" />
+                Command="{Binding Game.ShowMainMenuCommand}" />
+        <Button Grid.Column="1" Classes="pill primary" local:PlateChrome.TextureSeed="2" Content="{local:Text 'Start game'}" Command="{Binding StartCommand}" />
       </Grid>
 
       <StackPanel Grid.Row="2"
@@ -122,25 +121,29 @@
 
         <Border Height="1" Background="{StaticResource ScenarioSelectDividerBrush}" Margin="0,24,0,16" />
 
-        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
-          <local:OutlinedTextBlock Grid.Row="0" Grid.Column="0" Text="{local:Text 'Level'}" Classes="label details-label" />
-          <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SelectedScenarioLevel}" Classes="details-value" />
+        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto">
+          <local:OutlinedTextBlock Grid.Row="0" Grid.Column="0" Text="{local:Text 'Map'}" Classes="label details-label" />
+          <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SelectedScenarioMapSize}" Classes="details-value" />
 
-          <local:OutlinedTextBlock Grid.Row="1" Grid.Column="0" Text="{local:Text 'Map'}" Classes="label details-label" />
-          <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedScenarioMapSize}" Classes="details-value" />
+          <local:OutlinedTextBlock Grid.Row="1" Grid.Column="0" Text="{local:Text 'Cities'}" Classes="label details-label" />
+          <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedScenarioCityCount}" Classes="details-value" />
 
-          <local:OutlinedTextBlock Grid.Row="2" Grid.Column="0" Text="{local:Text 'Cities'}" Classes="label details-label" />
-          <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedScenarioCityCount}" Classes="details-value" />
+          <local:OutlinedTextBlock Grid.Row="2" Grid.Column="0" Text="{local:Text 'Races'}" Classes="label details-label" />
+          <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedScenarioRaces}" Classes="details-value" />
 
-          <local:OutlinedTextBlock Grid.Row="3" Grid.Column="0" Text="{local:Text 'Races'}" Classes="label details-label" />
-          <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SelectedScenarioRaces}" Classes="details-value" />
-
-          <local:OutlinedTextBlock Grid.Row="4" Grid.Column="0" Text="{local:Text 'Author'}" Classes="label details-label" />
-          <TextBlock Grid.Row="4"
+          <local:OutlinedTextBlock Grid.Row="3" Grid.Column="0" Text="{local:Text 'Author'}" Classes="label details-label" />
+          <TextBlock Grid.Row="3"
                      Grid.Column="1"
                      Text="{Binding SelectedScenarioCreator, TargetNullValue=—}"
                      Classes="details-value" />
         </Grid>
+
+        <Border Height="1" Background="{StaticResource ScenarioSelectDividerBrush}" Margin="0,8,0,16" />
+
+        <StackPanel Orientation="Horizontal">
+          <local:OutlinedTextBlock Text="{local:Text 'Suggested level'}" Classes="label details-label" />
+          <TextBlock Text="{Binding SelectedScenarioLevel}" Classes="details-value" />
+        </StackPanel>
       </StackPanel>
     </Grid>
   </Grid>

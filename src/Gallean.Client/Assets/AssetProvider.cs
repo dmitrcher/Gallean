@@ -1,26 +1,46 @@
 using Gallean.Common;
+using Gallean.Configuration;
 using SkiaSharp;
 
 namespace Gallean.Client;
 
 internal sealed partial class AssetProvider : IAssetProvider, IDisposable
 {
-    private const long SpriteCacheSize = 768L * 1024 * 1024;
-    private const long AnimationCacheSize = 3L * 1024 * 1024 * 1024;
-    private const long SoundCacheSize = 128L * 1024 * 1024;
-
     private readonly IAssetSource<SKImage> assetSource;
+    private readonly AssetImageDecoder imageDecoder;
+    private readonly GameSettingsSource gameSettingsSource;
     private readonly AssetCache<Sprite> spriteCache;
     private readonly AssetCache<Animation> animationCache;
     private readonly AssetCache<Sound> soundCache;
 
-    private AssetProvider(IAssetSource<SKImage> assetSource)
+    private AssetProvider(
+        IAssetSource<SKImage> assetSource,
+        AssetImageDecoder imageDecoder,
+        GameSettingsSource gameSettingsSource,
+        GCMemoryInfo memoryInfo)
     {
         this.assetSource = assetSource;
+        this.imageDecoder = imageDecoder;
+        this.gameSettingsSource = gameSettingsSource;
 
-        spriteCache = new AssetCache<Sprite>(SpriteCacheSize, LoadSprite, MeasureSprite, DisposeSprite);
-        animationCache = new AssetCache<Animation>(AnimationCacheSize, LoadAnimation, MeasureAnimation, DisposeAnimation);
-        soundCache = new AssetCache<Sound>(SoundCacheSize, LoadSound, MeasureSound, DisposeSound);
+        spriteCache = new AssetCache<Sprite>(GetSpriteCacheSize(memoryInfo), LoadSprite, MeasureSprite, DisposeSprite);
+        animationCache = new AssetCache<Animation>(GetAnimationCacheSize(memoryInfo), LoadAnimation, MeasureAnimation, DisposeAnimation);
+        soundCache = new AssetCache<Sound>(GetSoundCacheSize(memoryInfo), LoadSound, MeasureSound, DisposeSound);
+    }
+
+    private static long GetSpriteCacheSize(GCMemoryInfo memoryInfo)
+    {
+        return Math.Clamp(memoryInfo.TotalAvailableMemoryBytes / 32, 128L * 1024 * 1024, 768L * 1024 * 1024);
+    }
+
+    private static long GetAnimationCacheSize(GCMemoryInfo memoryInfo)
+    {
+        return Math.Clamp(memoryInfo.TotalAvailableMemoryBytes / 8, 512L * 1024 * 1024, 3L * 1024 * 1024 * 1024);
+    }
+
+    private static long GetSoundCacheSize(GCMemoryInfo memoryInfo)
+    {
+        return 128L * 1024 * 1024;
     }
 
     public AssetSpriteMetadata? GetOptionalSpriteMetadata(AssetSpriteKey key)
@@ -45,17 +65,40 @@ internal sealed partial class AssetProvider : IAssetProvider, IDisposable
 
     public AssetSoundMetadata? GetOptionalSoundMetadata(AssetSoundKey key)
     {
-        return assetSource.TryGetSoundMetadata(key);
+        AssetSoundKey localizedKey = MakeLocalizedSoundKey(key);
+
+        return assetSource.TryGetSoundMetadata(localizedKey);
     }
 
     public AssetCache<Sound>.Lease? GetOptionalSound(AssetSoundKey key)
     {
-        return soundCache.Acquire(key);
+        AssetSoundKey localizedKey = MakeLocalizedSoundKey(key);
+
+        return soundCache.Acquire(localizedKey);
     }
 
     public AssetStream? GetOptionalStream(AssetKey key)
     {
-        return assetSource.TryGetStream(key);
+        if (key is AssetSoundKey soundKey)
+        {
+            AssetSoundKey localizedKey = MakeLocalizedSoundKey(soundKey);
+
+            return assetSource.TryGetStream(localizedKey);
+        }
+        else
+        {
+            return assetSource.TryGetStream(key);
+        }
+    }
+
+    public void SetMaxPixelScale(int maxPixelScale)
+    {
+        if (imageDecoder.MaxPixelScale != maxPixelScale)
+        {
+            imageDecoder.MaxPixelScale = maxPixelScale;
+            spriteCache.Clear();
+            animationCache.Clear();
+        }
     }
 
     public void Dispose()
@@ -66,9 +109,9 @@ internal sealed partial class AssetProvider : IAssetProvider, IDisposable
         assetSource.Dispose();
     }
 
-    public static AssetProvider LoadDefault()
+    public static AssetProvider LoadDefault(GameSettingsSource settings, GCMemoryInfo memoryInfo)
     {
-        AssetProvider? provider = TryLoadDefault();
+        AssetProvider? provider = TryLoadDefault(settings, memoryInfo);
 
         if (provider is null)
         {
@@ -78,30 +121,38 @@ internal sealed partial class AssetProvider : IAssetProvider, IDisposable
         return provider;
     }
 
-    public static AssetProvider? TryLoadDefault()
+    public static AssetProvider? TryLoadDefault(GameSettingsSource settings, GCMemoryInfo memoryInfo)
     {
-        AssetPackSource<SKImage>? source = LoadPackSource();
+        AssetImageDecoder imageDecoder = new();
+        AssetPackSource<SKImage>? source = LoadPackSource(imageDecoder);
 
         if (source is null)
         {
             return null;
         }
 
-        return new AssetProvider(source);
+        return new AssetProvider(source, imageDecoder, settings, memoryInfo);
     }
 
-    private static AssetPackSource<SKImage>? LoadPackSource()
+    private static AssetPackSource<SKImage>? LoadPackSource(AssetImageDecoder imageDecoder)
     {
         IReadOnlyList<AssetPack>? packs = PackLoader.Load();
 
         if (packs is not null)
         {
-            return new AssetPackSource<SKImage>(packs, ImageDecoder.Instance);
+            return new AssetPackSource<SKImage>(packs, imageDecoder);
         }
         else
         {
             return null;
         }
+    }
+
+    private AssetSoundKey MakeLocalizedSoundKey(AssetSoundKey key)
+    {
+        GameSettings settings = gameSettingsSource.Current;
+
+        return key with { Language = key.Language ?? settings.EffectiveLanguage };
     }
 
     private Sprite? LoadSprite(AssetKey key)

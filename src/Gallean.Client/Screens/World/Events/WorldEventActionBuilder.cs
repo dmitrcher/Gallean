@@ -27,18 +27,15 @@ internal sealed class WorldEventActionBuilder(
             Entry.StackCreate data => BuildStackCreate(data),
             Entry.StackOwnerChange data => BuildStackOwnerChange(data),
             Entry.MountainRemove data => BuildMountainRemove(data),
-            Entry.TerrainExpansion data => BuildTerrainExpansion(data),
             Entry.Unfog data => BuildUnfog(data),
             Entry.SpellCast data => BuildSpellCast(data),
             Entry.GlobalSpellCast data => BuildGlobalSpellCast(data),
             Entry.ScenarioPopup data => BuildScenarioPopup(data),
             Entry.ObjectiveChange data => BuildObjectiveChange(data),
             Entry.StackIdle data => BuildStackIdle(data),
-            Entry.StackExhaust data => BuildStackExhaust(data),
             Entry.TurnStart data => BuildTurnStart(data),
             Entry.HotseatTurn data => BuildHotseatTurn(data),
             Entry.ScenarioEnd data => BuildScenarioEnd(data),
-            Entry.CityRiotEnd data => BuildCityRiotEnd(data),
             Entry.FortificationEnter data => BuildFortificationEnter(data),
             Entry.FortificationExit data => BuildFortificationExit(data),
             Entry.RuinLoot data => BuildRuinLoot(data),
@@ -53,8 +50,7 @@ internal sealed class WorldEventActionBuilder(
             Entry.SiteEnter data => BuildSiteEnter(data),
             Entry.Pause data => BuildPause(data),
             Entry.Battle data => BuildBattle(data),
-            Entry.GameStart data => BuildGameStart(data),
-            _ => throw new ArgumentOutOfRangeException(nameof(entry), entry, null)
+            Entry.GameStart data => BuildGameStart(data)
         };
     }
 
@@ -138,20 +134,6 @@ internal sealed class WorldEventActionBuilder(
         if (visibility.IsRevealed(mountainRemove.Center))
         {
             return Animate(mountainRemove, visibility);
-        }
-        else
-        {
-            return WorldEventAction.None;
-        }
-    }
-
-    private WorldEventAction BuildTerrainExpansion(Entry.TerrainExpansion terrainExpansion)
-    {
-        WorldVisibility visibility = WorldVisibility.Create(terrainExpansion.State, ViewPlayerId, fogEnabled);
-
-        if (visibility.IsRevealed(terrainExpansion.Position))
-        {
-            return Animate(terrainExpansion, visibility);
         }
         else
         {
@@ -293,18 +275,6 @@ internal sealed class WorldEventActionBuilder(
         }
     }
 
-    private WorldEventAction BuildStackExhaust(Entry.StackExhaust exhaust)
-    {
-        if (exhaust.State.Stacks.TryGetValue(exhaust.StackId, out WorldStack? stack) && stack.OwnerId == ViewPlayerId)
-        {
-            return new WorldEventAction.StackExhaust([], stack.Id);
-        }
-        else
-        {
-            return WorldEventAction.None;
-        }
-    }
-
     private WorldEventAction BuildTurnStart(Entry.TurnStart turnStart)
     {
         if (turnStart.PlayerId == ViewPlayerId)
@@ -355,22 +325,6 @@ internal sealed class WorldEventActionBuilder(
         if (scenarioEnd.WinnerId is not null && scenarioEnd.WinnerId.Value == ViewPlayerId)
         {
             return new WorldEventAction.AutoSave([], GameSaveType.Victory, Tr("Victory"));
-        }
-        else
-        {
-            return WorldEventAction.None;
-        }
-    }
-
-    private WorldEventAction BuildCityRiotEnd(Entry.CityRiotEnd riotEnd)
-    {
-        WorldPlan plan = WorldPlan.For(snapshot.WorldState);
-        WorldVisibility visibility = WorldVisibility.Create(snapshot.WorldState, ViewPlayerId, fogEnabled);
-        WorldFortification? fortification = visibility.GetFortificationAt(plan, riotEnd.Position);
-
-        if (fortification is not null)
-        {
-            return Sound(new AssetSoundKey.CityRiotEnd());
         }
         else
         {
@@ -548,12 +502,17 @@ internal sealed class WorldEventActionBuilder(
 
     private WorldEventAction BuildThiefActionResult(Entry.ThiefActionResult result)
     {
+        WorldThiefActionDefinition definition = definitions.GetThiefAction(result.Type);
+
+        string actionName = texts.GetGlobalText(definition.NameTextId).Text;
+
         if (result.PlayerId == ViewPlayerId)
         {
             return new WorldEventAction.ThiefActionMineResult(
                 [new AssetSoundKey.ThiefAction()],
                 result.GetFocusPosition(ViewPlayerId),
                 result.Type,
+                actionName,
                 result.IsSuccess);
         }
         else if (result.Target is not null && result.TargetPlayerId == ViewPlayerId)
@@ -564,6 +523,7 @@ internal sealed class WorldEventActionBuilder(
                 [new AssetSoundKey.ThiefAction()],
                 result.GetFocusPosition(ViewPlayerId),
                 result.Type,
+                actionName,
                 result.Target,
                 result.IsSuccess,
                 WorldPlayerFormatter.FormatLordName(texts, player));

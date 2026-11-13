@@ -1,5 +1,4 @@
 using Gallean.Common;
-using Gallean.Configuration;
 using Gallean.Engine;
 using Gallean.Tests.Common;
 
@@ -27,7 +26,8 @@ public sealed class WorldRenderStatePerformanceTests
             state.TurnInfo.CurrentPlayerId,
             Cursor: WorldCursor.Empty,
             FogEnabled: true,
-            Animation: null);
+            Animation: null,
+            IsPlayingEvent: false);
 
         PerformanceMeasurement measurement = PerformanceTestHelpers.Measure(() =>
         {

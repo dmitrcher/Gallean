@@ -685,6 +685,11 @@ public sealed class CityTabViewModelTests
         {
             Assert.That(screen.CityTitle, Is.EqualTo("Name"));
             Assert.That(screen.CitySummary, Is.EqualTo(new TextSpans([new TextSpan("City level: ", TextStyle.None), new TextSpan("3", TextStyle.Highlight)])));
+            Assert.That(screen.CityStats, Is.EqualTo(new StatRowViewModel[]
+            {
+                new(IconMoniker.Armor, "Armor", new StatValueViewModel(TextSpans.FromText("0"), 0), null),
+                new(IconMoniker.Heal, "Regeneration", new StatValueViewModel(TextSpans.FromText("20%"), 0), null)
+            }));
             Assert.That(screen.CityImageKey, Is.EqualTo(new AssetSpriteKey.CityImage(3)));
             Assert.That(screen.CapitalScene, Is.Null);
         }
@@ -899,7 +904,7 @@ public sealed class CityTabViewModelTests
                     null,
                     new StatRowViewModel(IconMoniker.Leadership, "Leadership", new StatValueViewModel(TextSpans.FromText("3"), 0), null),
                     [],
-                    [new UnitPermanentModifierViewModel(UnitPermanentModifierType.Common, IconMoniker.Armor, "+20 armor", "From city", null, 1)]))));
+                    [new UnitPermanentModifierViewModel(UnitPermanentModifierType.Common, IconMoniker.Armor, "+20 armor", "From city", null, 1, [])]))));
             Assert.That(screen.StackGridTitle, Is.EqualTo("name's party"));
             Assert.That(screen.StackLeadership, Is.EqualTo("2 / 3"));
             Assert.That(screen.GarrisonCapacity, Is.EqualTo("0 / 3"));
@@ -935,7 +940,7 @@ public sealed class CityTabViewModelTests
             null,
             null,
             [],
-            [new UnitPermanentModifierViewModel(UnitPermanentModifierType.Common, IconMoniker.Armor, "+20 armor", "From city", null, 1)])));
+            [new UnitPermanentModifierViewModel(UnitPermanentModifierType.Common, IconMoniker.Armor, "+20 armor", "From city", null, 1, [])])));
 
         await soldierSlot.SelectCommand.ExecuteAsync(null);
 
@@ -975,7 +980,7 @@ public sealed class CityTabViewModelTests
                 null,
                 new StatRowViewModel(IconMoniker.Leadership, "Leadership", new StatValueViewModel(TextSpans.FromText("3"), 0), null),
                 [],
-                [new UnitPermanentModifierViewModel(UnitPermanentModifierType.Common, IconMoniker.Armor, "+20 armor", "From city", null, 1)]))));
+                [new UnitPermanentModifierViewModel(UnitPermanentModifierType.Common, IconMoniker.Armor, "+20 armor", "From city", null, 1, [])]))));
     }
 
     [Test]
@@ -1169,6 +1174,11 @@ public sealed class CityTabViewModelTests
             Assert.That(management.PlayerResources, Is.EqualTo(new ResourceSetViewModel(new WorldResourceSet(100, 0, 0, 0, 0, 0), ResourceSetProjection.Gold)));
             Assert.That(screen.CityTitle, Is.EqualTo("Name"));
             Assert.That(screen.CitySummary, Is.EqualTo(TextSpans.FromText("Capital")));
+            Assert.That(screen.CityStats, Is.EqualTo(new StatRowViewModel[]
+            {
+                new(IconMoniker.Armor, "Armor", new StatValueViewModel(TextSpans.FromText("0"), 0), null),
+                new(IconMoniker.Heal, "Regeneration", new StatValueViewModel(TextSpans.FromText("35%"), 0), null)
+            }));
             Assert.That(screen.InventoryTransfer.Inventory.Items, Is.Empty);
             Assert.That(screen.CityImageKey, Is.EqualTo(new AssetSpriteKey.CapitalImage(WorldRace.Human)));
             Assert.That(screen.CapitalScene.Layers, Is.EqualTo(expectedLayers));
@@ -1468,11 +1478,12 @@ public sealed class CityTabViewModelTests
         using (Assert.EnterMultipleScope())
         {
             Assert.That(screen.TargetedAction, Is.EqualTo(CityTabViewModel.UnitActionType.Heal));
+            Assert.That(screen.TargetingPromptText, Is.EqualTo("Select a unit to heal it."));
             Assert.That(screen.StackGrid.Slots.Select(slot => slot.IsHighlighted), Is.EqualTo([false, true, false, false, false, false]));
             Assert.That(screen.GarrisonGrid.Slots.Select(slot => slot.IsHighlighted), Is.EqualTo([false, false, false, false, false, false]));
             Assert.That(screen.TargetPrices, Is.EqualTo(new Dictionary<WorldUnitId, ResourceSetViewModel>
             {
-                [new WorldUnitId("woundedSoldier")] = new ResourceSetViewModel(new WorldResourceSet(30, 0, 0, 0, 0, 0), ResourceSetProjection.All)
+                [new WorldUnitId("woundedSoldier")] = new(new WorldResourceSet(30, 0, 0, 0, 0, 0), ResourceSetProjection.All)
             }));
         }
 
@@ -1482,6 +1493,7 @@ public sealed class CityTabViewModelTests
         using (Assert.EnterMultipleScope())
         {
             Assert.That(screen.TargetedAction, Is.EqualTo(CityTabViewModel.UnitActionType.Heal));
+            Assert.That(screen.TargetingPromptText, Is.EqualTo("Select a unit to heal it."));
             Assert.That(screen.StackGrid.Slots.Select(slot => slot.IsHighlighted), Is.EqualTo([false, false, false, false, false, false]));
             Assert.That(screen.TargetPrices, Is.Empty);
         }
@@ -1491,11 +1503,12 @@ public sealed class CityTabViewModelTests
         using (Assert.EnterMultipleScope())
         {
             Assert.That(screen.TargetedAction, Is.EqualTo(CityTabViewModel.UnitActionType.Resurrect));
+            Assert.That(screen.TargetingPromptText, Is.EqualTo("Select a unit to resurrect it."));
             Assert.That(screen.StackGrid.Slots.Select(slot => slot.IsHighlighted), Is.EqualTo([false, false, false, false, false, false]));
             Assert.That(screen.GarrisonGrid.Slots.Select(slot => slot.IsHighlighted), Is.EqualTo([false, true, false, false, false, false]));
             Assert.That(screen.TargetPrices, Is.EqualTo(new Dictionary<WorldUnitId, ResourceSetViewModel>
             {
-                [new WorldUnitId("deadSoldier")] = new ResourceSetViewModel(new WorldResourceSet(50, 0, 0, 0, 0, 0), ResourceSetProjection.All)
+                [new WorldUnitId("deadSoldier")] = new(new WorldResourceSet(50, 0, 0, 0, 0, 0), ResourceSetProjection.All)
             }));
         }
 
@@ -1507,6 +1520,7 @@ public sealed class CityTabViewModelTests
         using (Assert.EnterMultipleScope())
         {
             Assert.That(screen.TargetedAction, Is.Null);
+            Assert.That(screen.TargetingPromptText, Is.Null);
             Assert.That(screen.GarrisonGrid.Slots.Select(slot => slot.IsHighlighted), Is.EqualTo([false, false, false, false, false, false]));
             Assert.That(screen.TargetPrices, Is.Empty);
         }
@@ -1807,7 +1821,7 @@ public sealed class CityTabViewModelTests
         {
             Assert.That(screen.UpgradeLabel, Is.EqualTo("Upgrade city"));
             Assert.That(screen.UpgradeCost, Is.EqualTo(new ResourceSetViewModel(new WorldResourceSet(150, 0, 0, 0, 0, 0), ResourceSetProjection.All)));
-            Assert.That(screen.GarrisonSummary.Text, Is.EqualTo("Units in city: 1"));
+            Assert.That(screen.GarrisonSummary.Text, Is.EqualTo("Garrison: 1 / 1"));
             Assert.That(screen.UpgradeCommand.CanExecute(null), Is.True);
         }
 
@@ -1892,7 +1906,7 @@ public sealed class CityTabViewModelTests
         {
             Assert.That(screen.UpgradeLabel, Is.EqualTo("Upgrade city"));
             Assert.That(screen.UpgradeCost, Is.EqualTo(new ResourceSetViewModel(new WorldResourceSet(75, 0, 0, 0, 0, 0), ResourceSetProjection.All)));
-            Assert.That(screen.GarrisonSummary.Text, Is.EqualTo("Units in city: 1"));
+            Assert.That(screen.GarrisonSummary.Text, Is.EqualTo("Garrison: 1 / 1"));
             Assert.That(screen.UpgradeCommand.CanExecute(null), Is.True);
         }
 
@@ -2270,6 +2284,7 @@ public sealed class CityTabViewModelTests
         using (Assert.EnterMultipleScope())
         {
             Assert.That(screen.TargetedAction, Is.Null);
+            Assert.That(screen.TargetingPromptText, Is.Null);
             Assert.That(screen.GarrisonGrid.Slots.Select(slot => slot.IsHighlighted), Is.EqualTo([false, false, false, false, false, false]));
             Assert.That(screen.Game.Alert.Current, Is.EqualTo(new Alert(AlertType.Error, IconMoniker.Warning, "Temple must be built in your capital", Details: null)));
         }
@@ -2330,6 +2345,7 @@ public sealed class CityTabViewModelTests
         using (Assert.EnterMultipleScope())
         {
             Assert.That(screen.TargetedAction, Is.EqualTo(CityTabViewModel.UnitActionType.LockType));
+            Assert.That(screen.TargetingPromptText, Is.EqualTo("Select a unit to lock its type."));
             Assert.That(screen.GarrisonGrid.Slots.Select(slot => slot.IsHighlighted), Is.EqualTo([true, false, false, false, false, false]));
         }
 
@@ -2353,6 +2369,7 @@ public sealed class CityTabViewModelTests
         using (Assert.EnterMultipleScope())
         {
             Assert.That(screen.TargetedAction, Is.EqualTo(CityTabViewModel.UnitActionType.LockType));
+            Assert.That(screen.TargetingPromptText, Is.EqualTo("Select a unit to lock its type."));
             Assert.That(screen.GarrisonGrid.Slots.Select(slot => slot.IsHighlighted), Is.EqualTo([false, false, false, false, false, false]));
         }
 
@@ -2361,6 +2378,7 @@ public sealed class CityTabViewModelTests
         using (Assert.EnterMultipleScope())
         {
             Assert.That(screen.TargetedAction, Is.Null);
+            Assert.That(screen.TargetingPromptText, Is.Null);
             Assert.That(screen.Game.Alert.Current, Is.Null);
         }
 
@@ -2369,6 +2387,7 @@ public sealed class CityTabViewModelTests
         using (Assert.EnterMultipleScope())
         {
             Assert.That(screen.TargetedAction, Is.Null);
+            Assert.That(screen.TargetingPromptText, Is.Null);
             Assert.That(screen.Game.Alert.Current, Is.EqualTo(new Alert(AlertType.Info, IconMoniker.Locked, "No units can have their type locked", Details: null)));
         }
     }
@@ -2444,6 +2463,7 @@ public sealed class CityTabViewModelTests
         using (Assert.EnterMultipleScope())
         {
             Assert.That(screen.TargetedAction, Is.Null);
+            Assert.That(screen.TargetingPromptText, Is.Null);
             Assert.That(screen.GarrisonGrid.Slots.Select(slot => slot.IsHighlighted), Is.EqualTo([false, false, false, false, false, false]));
             Assert.That(screen.Game.Alert.Current, Is.EqualTo(new Alert(AlertType.Info, IconMoniker.Heal, "No units can be healed", Details: null)));
         }

@@ -35,7 +35,7 @@ public sealed class WorldOverlayRenderTests
         surface.Canvas.Clear(SKColors.Transparent);
         surface.Canvas.Translate(128, 0);
 
-        renderer.Render(surface.Canvas, content, state, assets, TimeSpan.Zero, TimeSpan.Zero, renderResolution: 1.0f, hitboxOverlay: false);
+        renderer.Render(surface.Canvas, content, state, assets, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero, renderResolution: 1.0f, hitboxOverlay: false);
 
         using SKImage snapshot = surface.Snapshot();
         using SKPixmap pixels = snapshot.PeekPixels();
@@ -71,7 +71,7 @@ public sealed class WorldOverlayRenderTests
             }
         }
 
-        WorldRenderState state = new(Terrain: BuildTerrain(), FogTiles: [], ObjectiveMarkers: [], AmbientSounds: [], MapObjects: [], Stacks: [], Minimap: new MinimapState(5, 5, [], []), Cursors: [], Reach: new ReachOverlay(reach), Highlights: new HighlightOverlay([]), SelectedPath: null, Animation: null, Clouds: []);
+        WorldRenderState state = new(Terrain: BuildTerrain(), FogTiles: [], ObjectiveMarkers: [], AmbientSounds: [], MapObjects: [], Stacks: [], Minimap: new MinimapState(5, 5, [], []), Cursors: [], Reach: new ReachOverlay(reach), Highlights: new HighlightOverlay([]), SelectedPath: null, Animation: null, TerrainExpansion: null, Clouds: []);
 
         IReadOnlyList<SKColor> colors = RenderColors(assets, state, [new SKPointI(128, 10), new SKPointI(128, 24), new SKPointI(128, 26), new SKPointI(128, 29), new SKPointI(128, 64)]);
 
@@ -106,7 +106,7 @@ public sealed class WorldOverlayRenderTests
             new AssetSpriteKey.StackBanner(0),
             Opacity: 1.0);
 
-        WorldRenderState state = new(Terrain: BuildTerrain(), FogTiles: [], ObjectiveMarkers: [], AmbientSounds: [], MapObjects: [], Stacks: [stack], Minimap: new MinimapState(5, 5, [], []), Cursors: [], Reach: null, Highlights: new HighlightOverlay([new Highlight(stack, Theme.World.Highlight.SelectedColor)]), SelectedPath: null, Animation: null, Clouds: []);
+        WorldRenderState state = new(Terrain: BuildTerrain(), FogTiles: [], ObjectiveMarkers: [], AmbientSounds: [], MapObjects: [], Stacks: [stack], Minimap: new MinimapState(5, 5, [], []), Cursors: [], Reach: null, Highlights: new HighlightOverlay([new Highlight(stack, Theme.World.Highlight.SelectedColor)]), SelectedPath: null, Animation: null, TerrainExpansion: null, Clouds: []);
 
         IReadOnlyList<SKColor> colors = RenderColors(assets, state, [new SKPointI(126, 62), new SKPointI(124, 62), new SKPointI(121, 62), new SKPointI(116, 62), new SKPointI(105, 62)]);
 
@@ -128,13 +128,44 @@ public sealed class WorldOverlayRenderTests
             .ResolveSound(_ => null)
             .Build();
 
-        WorldRenderState state = new(Terrain: BuildTerrain(), FogTiles: [], ObjectiveMarkers: [], AmbientSounds: [], MapObjects: [], Stacks: [], Minimap: new MinimapState(5, 5, [], []), Cursors: [], Reach: new ReachOverlay([new WorldPosition(2, 2)]), Highlights: new HighlightOverlay([]), SelectedPath: null, Animation: null, Clouds: []);
+        WorldRenderState state = new(Terrain: BuildTerrain(), FogTiles: [], ObjectiveMarkers: [], AmbientSounds: [], MapObjects: [], Stacks: [], Minimap: new MinimapState(5, 5, [], []), Cursors: [], Reach: new ReachOverlay([new WorldPosition(2, 2)]), Highlights: new HighlightOverlay([]), SelectedPath: null, Animation: null, TerrainExpansion: null, Clouds: []);
 
         IReadOnlyList<SKColor> colors = RenderColors(assets, state, [new SKPointI(128, 40), new SKPointI(128, 56), new SKPointI(128, 58), new SKPointI(128, 64)]);
 
         Assert.That(colors, Is.EqualTo(new SKColor[]
         {
             new(0, 0, 0, 255), new(119, 154, 189, 255), new(48, 68, 92, 255), new(18, 28, 40, 255)
+        }));
+    }
+
+    [Test]
+    public void RiotHighlightTest()
+    {
+        TestAssetProviderBuilder builder = new();
+        Sprite groundSprite = builder.CreateSprite(SKColors.Black, 64, 32);
+        Animation body = builder.CreateAnimation(
+            new AssetAnimationMetadata(FrameCount: 1, Width: 4, Height: 6, OffsetX: -3, OffsetY: -5, TriggerFrame: null, SecondTriggerFrame: null),
+            [builder.CreateSprite(SKColors.White, 4, 6, offsetX: -3, offsetY: -5)]);
+
+        using TestAssetProvider assets = builder
+            .ResolveSprite(_ => groundSprite)
+            .ResolveAnimation(_ => body)
+            .ResolveSound(_ => null)
+            .Build();
+
+        Fortification city = new(
+            new WorldPosition(2, 2),
+            Depth: 0,
+            new WorldFootprint(new WorldPosition(2, 2), 1, 1),
+            new AssetAnimationKey.City(2));
+
+        WorldRenderState state = new(Terrain: BuildTerrain(), FogTiles: [], ObjectiveMarkers: [], AmbientSounds: [], MapObjects: [city], Stacks: [], Minimap: new MinimapState(5, 5, [], []), Cursors: [], Reach: null, Highlights: new HighlightOverlay([new Highlight(city, Theme.World.Highlight.RiotColor)]), SelectedPath: null, Animation: null, TerrainExpansion: null, Clouds: []);
+
+        IReadOnlyList<SKColor> colors = RenderColors(assets, state, [new SKPointI(126, 62), new SKPointI(124, 62), new SKPointI(121, 62), new SKPointI(116, 62), new SKPointI(105, 62)]);
+
+        Assert.That(colors, Is.EqualTo(new SKColor[]
+        {
+            new(255, 255, 255, 255), new(117, 69, 18, 255), new(30, 17, 5, 255), new(2, 1, 0, 255), new(0, 0, 0, 255)
         }));
     }
 }

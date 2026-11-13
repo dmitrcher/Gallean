@@ -10,12 +10,14 @@
   <a href="https://github.com/GalleanDev/Gallean/releases/latest">Download</a>
 </p>
 
-Gallean is a full remake of Disciples II: Rise of the Elves: every campaign and scenario, the original rules, hotseat multiplayer, and visuals rebuilt for 4K with dynamic lighting. It is localized into eight languages, which you can switch in the middle of a game.
+Gallean is a full remake of Disciples II: Rise of the Elves and Gallean's Return, with every campaign and scenario, the original rules, hotseat multiplayer, and visuals rebuilt for 4K with dynamic lighting. It is localized into eight languages, which you can switch in the middle of a game.
 
 <p align="center">
-  <a href="https://gallean.org/media/brand/gallean-battle.webp"><img src="https://gallean.org/media/brand/gallean-battle-1920px.webp" width="32%" /></a>
-  <a href="https://gallean.org/media/brand/gallean-city.webp"><img src="https://gallean.org/media/brand/gallean-city-1920px.webp" width="32%" /></a>
-  <a href="https://gallean.org/media/brand/gallean-buildings.webp"><img src="https://gallean.org/media/brand/gallean-buildings-1920px.webp" width="32%" /></a>
+  <a href="https://gallean.org/media/brand/gallean-path-plan.webp"><img src="https://gallean.org/media/brand/gallean-path-plan-1920px.webp" alt="Overworld" width="49%" /></a>
+  <a href="https://gallean.org/media/brand/gallean-battle.webp"><img src="https://gallean.org/media/brand/gallean-battle-1920px.webp" alt="Battle" width="49%" /></a>
+  <br />
+  <a href="https://gallean.org/media/brand/gallean-city.webp"><img src="https://gallean.org/media/brand/gallean-city-1920px.webp" alt="City" width="49%" /></a>
+  <a href="https://gallean.org/media/brand/gallean-buildings.webp"><img src="https://gallean.org/media/brand/gallean-buildings-1920px.webp" alt="Buildings" width="49%" /></a>
 </p>
 
 ## Localization
@@ -35,10 +37,10 @@ Gallean is fully localized into eight languages, which you can switch in the mid
 
 ## System requirements
 
-- **Operating system:** Windows 10 or newer (x64), Linux (x64), macOS (64-bit Apple Silicon or Intel)
+- **Operating system:** Windows 10 or newer (x64), Linux (x64), macOS (64-bit Apple Silicon or Intel), Android 8.0 or newer (arm64, x64)
 - **Processor:** Any 64-bit dual-core
 - **Memory:** 4 GB RAM
-- **Graphics:** 1 GB, DirectX 11 or OpenGL 3.0. Integrated graphics work.
+- **Graphics:** 1 GB, DirectX 10 or OpenGL 3.0. Integrated graphics work.
 
 ## Save games
 
@@ -47,10 +49,11 @@ Gallean is fully localized into eight languages, which you can switch in the mid
 | Windows | `%LOCALAPPDATA%\Gallean\Saves` |
 | Linux | `~/.local/share/Gallean/Saves` |
 | macOS | `~/Library/Application Support/Gallean/Saves` |
+| Android | `Android/data/org.gallean.client/files/Saves` |
 
 ## Building
 
-You will need the .NET SDK 10. See [`global.json`](global.json).
+You will need the .NET SDK 11. See [`global.json`](global.json).
 
 ```bash
 dotnet build
@@ -63,6 +66,27 @@ dotnet run --project src/Gallean.Client.Windows
 dotnet run --project src/Gallean.Client.Linux
 dotnet run --project src/Gallean.Client.MacOS
 ```
+
+### Android
+
+The Android client lives in [`src/Gallean.Client.Android`](src/Gallean.Client.Android). It is not part of `Gallean.slnx`, so desktop builds do not need the Android workload. You will need the .NET Android workload and the Android SDK:
+
+```bash
+dotnet workload install android
+dotnet publish src/Gallean.Client.Android -c Release -p:AndroidSdkDirectory=$ANDROID_HOME
+```
+
+The APK will be in `src/Gallean.Client.Android/bin/Release/net11.0-android/publish/`. It needs Android 8.0 or newer with OpenGL ES 3.0, and runs in landscape.
+
+The game data ships inside the APK, but the asset pack does not. On first launch, tap **Open** on the asset pack screen to pick a `.galleanpack` file and import it, or copy it over USB:
+
+```bash
+adb push assets-v1.galleanpack /sdcard/Android/data/org.gallean.client/files/Assets/
+```
+
+Saves and logs are next to it, in `Android/data/org.gallean.client/files/`.
+
+On a touch screen, tap to click, drag to scroll the map, pinch to zoom, and long-press where you would right-click to see details.
 
 ## Tests
 
@@ -78,7 +102,7 @@ dotnet test --filter TestCategory=Visual
 
 ## Publishing
 
-Each client publishes as a trimmed Native AOT build on its own platform, so you need the [Native AOT prerequisites](https://learn.microsoft.com/dotnet/core/deploying/native-aot/#prerequisites) installed. On macOS, install Xcode or its Command Line Tools (`xcode-select --install`).
+Each client publishes as a Native AOT build on its own platform, so you need the [Native AOT prerequisites](https://learn.microsoft.com/dotnet/core/deploying/native-aot/#prerequisites) installed. On macOS, install Xcode or its Command Line Tools (`xcode-select --install`).
 
 ```bash
 dotnet publish
@@ -88,7 +112,7 @@ The release will be in `dist/` at the root, for example `dist/Gallean-0.8.0-linu
 
 ## Assets
 
-The game needs a `.galleanpack` with its assets. [Packer](tools/Packer) can build one from your own copy of the original game and can enhance it with the 4K asset pipeline.
+The game needs a `.galleanpack` with assets. [Packer](tools/Packer) can build one from your own copy of the original game and can enhance it with the 4K asset pipeline.
 
 ---
 

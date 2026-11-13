@@ -27,6 +27,7 @@ internal sealed partial class WorldVisual : AbstractAnimatedVisual
     private readonly AnimationClock animationClock = new();
     private readonly PlaybackClock playbackClock = new();
     private readonly AnimationPlayback<WorldRenderState.WorldAnimation> animationPlayback = new();
+    private readonly AnimationPlayback<WorldRenderState.TerrainExpansionAnimation> terrainExpansionPlayback = new();
     private readonly HashSet<Key> pressedKeys = [];
     private readonly WorldRenderer renderer = new();
     private readonly ScrollHelper scrollHelper = new();
@@ -49,6 +50,8 @@ internal sealed partial class WorldVisual : AbstractAnimatedVisual
     {
         Focusable = false;
         ClipToBounds = true;
+
+        AddHandler(HoldingEvent, (_, e) => OnTouchHolding(e));
     }
 
     public bool IsHitboxOverlayVisible
@@ -200,8 +203,9 @@ internal sealed partial class WorldVisual : AbstractAnimatedVisual
             (Key.Tab or Key.N, KeyModifiers.Shift) => [ViewModel.SelectPreviousStackCommand],
             (Key.Tab or Key.N, KeyModifiers.None) => [ViewModel.SelectNextStackCommand],
             (Key.T, KeyModifiers.None) => [ViewModel.InspectStackCommand],
+            (Key.M, KeyModifiers.None) => [ViewModel.ContinuePathCommand],
             (Key.Space, KeyModifiers.None) => [ViewModel.FastForwardCommand],
-            (Key.Enter, KeyModifiers.None) => [ViewModel.FastForwardCommand, ViewModel.FinishStackCommand],
+            (Key.Enter, KeyModifiers.None) => [ViewModel.FastForwardCommand, ViewModel.FinishStackCommand, ViewModel.SelectNextStackCommand],
             (Key.Enter, KeyModifiers.Control) => [ViewModel.EndTurnCommand],
             (Key.E, KeyModifiers.None) => [ViewModel.EndTurnCommand],
             (Key.C, KeyModifiers.None) => [ViewModel.OpenCapitalCommand],
@@ -269,6 +273,12 @@ internal sealed partial class WorldVisual : AbstractAnimatedVisual
             return;
         }
 
+        if (IsTouch(e))
+        {
+            OnTouchPressed(e);
+            return;
+        }
+
         PointerPoint point = e.GetCurrentPoint(this);
         Point worldPoint = GetWorldPoint(e);
         IReadOnlyList<WorldRenderContent.HitTarget> hitTargets = snapshotWorker.Current?.WorldContent.HitTargets ?? [];
@@ -276,7 +286,14 @@ internal sealed partial class WorldVisual : AbstractAnimatedVisual
 
         if (point.Properties.IsRightButtonPressed)
         {
-            ViewModel.ShowPositionInfo(WorldTransform.FromWorldPoint(worldPoint), hitPosition);
+            if (ViewModel.CancelSelectedActionCommand.CanExecute(null))
+            {
+                ViewModel.CancelSelectedActionCommand.Execute(null);
+            }
+            else
+            {
+                ViewModel.ShowPositionInfo(WorldTransform.FromWorldPoint(worldPoint), hitPosition);
+            }
 
             e.Handled = true;
         }
@@ -296,6 +313,12 @@ internal sealed partial class WorldVisual : AbstractAnimatedVisual
     {
         base.OnPointerReleased(e);
 
+        if (IsTouch(e))
+        {
+            OnTouchReleased(e);
+            return;
+        }
+
         if (e.InitialPressMouseButton == MouseButton.Right)
         {
             ViewModel.HidePositionInfo();
@@ -311,6 +334,12 @@ internal sealed partial class WorldVisual : AbstractAnimatedVisual
     {
         base.OnPointerCaptureLost(e);
 
+        if (e.Pointer.Type == PointerType.Touch)
+        {
+            OnTouchCaptureLost(e);
+            return;
+        }
+
         panAnchor = null;
 
         ViewModel.HidePositionInfo();
@@ -322,6 +351,12 @@ internal sealed partial class WorldVisual : AbstractAnimatedVisual
 
         if (!ViewModel.IsActive)
         {
+            return;
+        }
+
+        if (IsTouch(e))
+        {
+            OnTouchMoved(e);
             return;
         }
 
@@ -354,11 +389,24 @@ internal sealed partial class WorldVisual : AbstractAnimatedVisual
     {
         base.OnPointerExited(e);
 
+        // A finger leaves when it is lifted, but the path it showed must stay until the next tap.
+        if (IsTouch(e))
+        {
+            return;
+        }
+
         ViewModel.ClearHover();
     }
 
     private void OnTopLevelPointerMoved(object? sender, PointerEventArgs e)
     {
+        if (IsTouch(e))
+        {
+            // Fingers near the screen edge are not a request to scroll.
+            scrollHelper.HandlePointerExited();
+            return;
+        }
+
         Point position = e.GetPosition(this);
         Rect interfaceRect = new Rect(Bounds.Size).Deflate(InterfaceScrollMargin);
 
@@ -461,7 +509,7 @@ internal sealed partial class WorldVisual : AbstractAnimatedVisual
                 }
             }
 
-            if (animationPlayback.IsPlaying)
+            if (animationPlayback.IsPlaying || terrainExpansionPlayback.IsPlaying)
             {
                 redraw = true;
             }
@@ -587,6 +635,7 @@ internal sealed partial class WorldVisual : AbstractAnimatedVisual
         RegisterAnimation(snapshot, playbackTime);
 
         TimeSpan animationTime = animationPlayback.GetElapsed(playbackTime);
+        TimeSpan terrainExpansionTime = terrainExpansionPlayback.GetElapsed(playbackTime);
         Matrix view = camera.GetViewMatrix();
         GameSettings settings = SettingsScope.GetSettings(this);
 
@@ -599,6 +648,7 @@ internal sealed partial class WorldVisual : AbstractAnimatedVisual
             Assets,
             loopTime,
             animationTime,
+            terrainExpansionTime,
             settings.RenderResolutionRatio,
             IsHitboxOverlayVisible,
             Diagnostics));
@@ -607,6 +657,12 @@ internal sealed partial class WorldVisual : AbstractAnimatedVisual
     private void RegisterAnimation(WorldScreenSnapshot? snapshot, TimeSpan now)
     {
         WorldRenderState.WorldAnimation? animation = snapshot?.WorldState.Animation;
+        WorldRenderState.TerrainExpansionAnimation? terrainExpansion = snapshot?.WorldState.TerrainExpansion;
+
+        if (terrainExpansionPlayback.Register(terrainExpansion, now) && terrainExpansion is not null)
+        {
+            Audio.PlaySound(terrainExpansion.SoundKey);
+        }
 
         if (animation is not null &&
             animationPlayback.Current is not null &&

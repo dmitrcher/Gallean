@@ -51,6 +51,7 @@ public static class ScenarioLoader
                 nameTextId,
                 new ScenarioRace(MapRace(playRace.RaceType), new GlobalTextId(playRace.NameText)),
                 campaign.Skirmish,
+                campaign.CanImport,
                 scenarios));
         }
 
@@ -177,6 +178,14 @@ public static class ScenarioLoader
                     ScenarioLeader leader = new(unit, LeaderEquipment.Empty, WorldInventory.Empty, pendingUpgrades, 0);
 
                     stacks = ImportLeader(stacks, capitalStack, leader, definitions, globals);
+                }
+
+                if (player.LeaderName is not null)
+                {
+                    WorldPlayer owner = FindPlayer(players, player.Race);
+                    WorldStack capitalStack = FindCapitalStack(stacks, fortifications, owner.Id);
+
+                    stacks = SetLeaderName(stacks, capitalStack, player.LeaderName, definitions);
                 }
             }
         }
@@ -1874,6 +1883,19 @@ public static class ScenarioLoader
             PendingLeaderUpgrades = scenarioLeader.PendingLeaderUpgrades,
             BattlesWon = scenarioLeader.BattlesWon
         };
+
+        return stacks.SetItem(stack.Id, stack);
+    }
+
+    private static ImmutableSortedDictionary<WorldStackId, WorldStack> SetLeaderName(
+        ImmutableSortedDictionary<WorldStackId, WorldStack> stacks,
+        WorldStack stack,
+        UnitName name,
+        IGameDefinitionProvider definitions)
+    {
+        (WorldUnit leader, _, _) = stack.GetLeader(definitions);
+
+        stack = stack with { Units = stack.Units.Replace(leader, leader with { Name = name }) };
 
         return stacks.SetItem(stack.Id, stack);
     }

@@ -13,18 +13,30 @@ internal sealed partial class CityTabView : UserControl
 
         DragDropBehavior.Attach(this);
         AddHandler(PointerReleasedEvent, OnItemPointerReleased, RoutingStrategies.Bubble, true);
+        AddHandler(PointerPressedEvent, OnTargetingPointerPressed, RoutingStrategies.Bubble);
+    }
+
+    private CityTabViewModel ViewModel => (CityTabViewModel)DataContext!;
+
+    private void OnTargetingPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (ViewModel.TargetedAction is not null)
+        {
+            e.Handled = true;
+
+            ViewModel.CancelTargetingCommand.Execute(null);
+        }
     }
 
     private void OnItemPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        if (DataContext is CityTabViewModel viewModel &&
-            e.InitialPressMouseButton == MouseButton.Left &&
+        if (e.InitialPressMouseButton == MouseButton.Left &&
             e.KeyModifiers.HasFlag(KeyModifiers.Control) &&
             e.Source is StyledElement { DataContext: InventoryItemViewModel item })
         {
             e.Handled = true;
 
-            viewModel.InventoryTransfer.TransferItemAsync(item.GroupReference).FileAndForget();
+            ViewModel.InventoryTransfer.TransferItemAsync(item.GroupReference).FileAndForget();
         }
     }
 }

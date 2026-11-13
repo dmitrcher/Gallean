@@ -24,13 +24,13 @@ internal sealed partial class WorldScreenViewModel :
     private static readonly TimeSpan StackIdleInterval = TimeSpan.FromMinutes(2);
     private static readonly TimeSpan StackStepThreshold = TimeSpan.FromMilliseconds(100);
 
-    private readonly CursorTypeVisitor cursorTypeVisitor;
     private readonly EventActionPlayer eventActionPlayer;
     private readonly WorldEventQueue eventQueue;
     private readonly WorldFinishedStacks finishedStacks;
     private readonly MusicQueue musicQueue;
     private readonly IRandomProvider random;
     private WorldCursor cursor = WorldCursor.Empty;
+    private ImmutableDictionary<WorldStackId, WorldPosition> stackDestinations = ImmutableDictionary<WorldStackId, WorldPosition>.Empty;
     private WorldPosition? infoTile;
     private WorldPosition? infoObject;
     private WorldStackId? infoStackId;
@@ -38,13 +38,13 @@ internal sealed partial class WorldScreenViewModel :
     private TimeSpan stackIdleRemaining;
     private WorldRenderRequest? renderRequest;
     private ActiveMove? activeMove;
+    private WorldGetPlayerInfoCommand.Result playerInfo;
 
     public WorldScreenViewModel(GameModel gameModel, GameViewModel gameViewModel, IRandomProvider random)
         : base(gameModel, gameViewModel)
     {
         this.random = random;
 
-        cursorTypeVisitor = new CursorTypeVisitor(gameModel);
         eventActionPlayer = new EventActionPlayer(this);
 
         eventQueue = new WorldEventQueue(gameModel.Scenario, gameModel.World.Events);
@@ -66,6 +66,7 @@ internal sealed partial class WorldScreenViewModel :
             EndTurnCommand,
             ActivateStackActionCommand,
             InspectStackCommand,
+            ContinuePathCommand,
             FinishStackCommand,
             SelectPreviousStackCommand,
             SelectNextStackCommand,
@@ -89,6 +90,10 @@ internal sealed partial class WorldScreenViewModel :
 
     [ObservableProperty]
     public partial ResourceSetViewModel? ActionPromptCost { get; private set; }
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(CancelSelectedActionCommand))]
+    public partial bool HasSelectedAction { get; private set; }
 
     [ObservableProperty]
     public partial string? ObjectiveText { get; private set; }
@@ -253,6 +258,43 @@ internal sealed partial class WorldScreenViewModel :
         SelectStackAt(position);
     }
 
+    /// <summary>
+    /// Applies the selected map action (a spell, an item or a rod) for a touch tap.
+    /// Without hover there is no cursor to show valid targets, and a finger on a stack usually lands on the tile
+    /// behind its figure, so the object under the finger is tried as well. An invalid tap keeps the action selected
+    /// so the player can tap again. Returns false when no action is selected.
+    /// </summary>
+    public bool TryHandleTouchAction(WorldPosition tile, WorldPosition? objectPosition)
+    {
+        WorldCursorAction? action = cursor.Action;
+
+        if (action is null || IsBusy)
+        {
+            return false;
+        }
+
+        if (!TryDispatchTouchAction(action, tile) &&
+            (!objectPosition.HasValue || !TryDispatchTouchAction(action, objectPosition.GetValueOrDefault())))
+        {
+            Game.PlaySound(new AssetSoundKey.Beep());
+        }
+
+        return true;
+    }
+
+    private bool TryDispatchTouchAction(WorldCursorAction action, WorldPosition position)
+    {
+        if (!WorldState.Map.IsValidPosition(position) ||
+            GameModel.World.DryRunCommand(action.CreateCommand(position)).Error is not null)
+        {
+            return false;
+        }
+
+        DispatchSelectedActionAsync(action, position).FileAndForget();
+
+        return true;
+    }
+
     private bool TryHandleInspectAction(WorldPosition tile, WorldPosition? objectPosition, int clickCount)
     {
         WorldStack? selected = ResolveSelectedStack();
@@ -262,6 +304,12 @@ internal sealed partial class WorldScreenViewModel :
             WorldPlan plan = WorldPlan.For(WorldState);
             WorldVisibility visibility = WorldVisibility.Create(WorldState, ViewPlayerId, FogEnabled);
             WorldFortification? fortification = visibility.GetFortificationAt(plan, selected.Position);
+            WorldSite? site = visibility.GetSiteAt(plan, selected.Position);
+
+            if (site is not null)
+            {
+                return false;
+            }
 
             if (fortification is not null && fortification.Owner == ViewPlayerId)
             {
@@ -319,6 +367,15 @@ internal sealed partial class WorldScreenViewModel :
             {
                 OpenFortification(fortification);
             }
+            else
+            {
+                WorldPathSelection? path = BuildPathSelection(stack, stack.Position);
+
+                if (path is not null && path.Encounter is not null)
+                {
+                    MoveSelectedStackAsync(stack, path).FileAndForget();
+                }
+            }
         }
 
         return true;
@@ -333,20 +390,43 @@ internal sealed partial class WorldScreenViewModel :
             return false;
         }
 
-        if (cursor.ReachablePositions.Contains(position))
+        WorldPathSelection? path = cursor.Path;
+
+        if (path is not null && path.Destination == position)
         {
-            WorldPathSelection? path = BuildPathSelection(selected, position);
-
-            if (path is not null)
-            {
-                MoveSelectedStackAsync(selected, path).FileAndForget();
-            }
-
-            return true;
+            MoveSelectedStackAsync(selected, path).FileAndForget();
         }
         else
         {
-            return false;
+            SelectPath(selected, position);
+        }
+
+        return true;
+    }
+
+    private void SelectPath(WorldStack stack, WorldPosition target)
+    {
+        ICommandResult<WorldCommandError, WorldEvent, WorldGetPathCommand.Result> result =
+            GameModel.World.DryRunCommand(new WorldGetPathCommand(stack.Id, target));
+
+        if (result.Failed)
+        {
+            WorldPlan plan = WorldPlan.For(WorldState);
+            WorldVisibility visibility = WorldVisibility.Create(WorldState, ViewPlayerId, FogEnabled);
+
+            SetSelectedPath(stack, null);
+
+            if (visibility.IsRevealed(target) && !plan.IsObstacleAt(target))
+            {
+                Game.ShowError(WorldCommandErrorFormatter.Format(result.Error.Value));
+            }
+        }
+        else
+        {
+            WorldGetPathCommand.Result data = result.Data;
+            WorldPathSelection path = new(target, data.Path, data.Remainder, data.Encounter);
+
+            SetSelectedPath(stack, path);
         }
     }
 
@@ -499,9 +579,30 @@ internal sealed partial class WorldScreenViewModel :
             ViewPlayerId,
             position,
             visibility,
+            GetResourceNodeInfo(position, plan),
             GameModel.Definitions,
             GameModel.Texts,
             GameModel.Stats);
+    }
+
+    private WorldGetResourceNodeInfoCommand.Result? GetResourceNodeInfo(WorldPosition position, WorldPlan plan)
+    {
+        if (plan.GetResourceNodeAt(position) is null)
+        {
+            return null;
+        }
+
+        ICommandResult<WorldCommandError, WorldEvent, WorldGetResourceNodeInfoCommand.Result> result =
+            GameModel.World.DryRunCommand(new WorldGetResourceNodeInfoCommand(ViewPlayerId, position));
+
+        if (result.Failed)
+        {
+            return null;
+        }
+        else
+        {
+            return result.Data;
+        }
     }
 
     public void UpdateHover(WorldPosition hoverTile, WorldPosition? objectPosition)
@@ -510,42 +611,17 @@ internal sealed partial class WorldScreenViewModel :
 
         if (WorldState.Map.IsValidPosition(tile))
         {
-            WorldPosition? hoverTarget = IsBusy ? null : ResolveHoverTarget(tile);
-            WorldPathSelection? hoverPath = ResolveHoverPath(cursor, hoverTarget);
-
-            SetCursor(cursor with { HoverTile = tile, HoverTarget = hoverTarget, HoverPath = hoverPath, HoverObject = objectPosition });
+            SetCursor(cursor with { HoverTile = tile, HoverObject = objectPosition });
         }
         else
         {
-            SetCursor(cursor with { HoverTile = null, HoverTarget = null, HoverPath = null, HoverObject = objectPosition });
+            SetCursor(cursor with { HoverTile = null, HoverObject = objectPosition });
         }
     }
 
     public void ClearHover()
     {
-        SetCursor(cursor with { HoverTile = null, HoverTarget = null, HoverPath = null, HoverObject = null });
-    }
-
-    private WorldPathSelection? ResolveHoverPath(WorldCursor current, WorldPosition? hoverTarget)
-    {
-        WorldStack? selected = ResolveSelectedStack();
-
-        if (hoverTarget is not null &&
-            selected is not null &&
-            current.Action is null &&
-            current.ReachablePositions.Contains(hoverTarget.Value))
-        {
-            if (current.HoverPath is not null && current.HoverPath.Destination == hoverTarget.Value)
-            {
-                return current.HoverPath;
-            }
-            else
-            {
-                return BuildPathSelection(selected, hoverTarget.Value);
-            }
-        }
-
-        return null;
+        SetCursor(cursor with { HoverTile = null, HoverObject = null });
     }
 
     [RelayCommand(CanExecute = nameof(CanDispatchCommand))]
@@ -571,19 +647,12 @@ internal sealed partial class WorldScreenViewModel :
     [RelayCommand(CanExecute = nameof(CanSelectPreviousStack))]
     private void SelectPreviousStack()
     {
-        int index = FindStackItemIndex(cursor.StackId);
-        WorldStackItemViewModel previous;
+        WorldStackItemViewModel? previous = FindNextAvailableStackItem([.. StackItems.Reverse()], cursor.StackId);
 
-        if (index > 0)
+        if (previous is not null)
         {
-            previous = StackItems[index - 1];
+            FocusStack(WorldState.Stacks[previous.StackId]);
         }
-        else
-        {
-            previous = StackItems[^1];
-        }
-
-        FocusStack(WorldState.Stacks[previous.StackId]);
     }
 
     private bool CanSelectPreviousStack()
@@ -593,25 +662,18 @@ internal sealed partial class WorldScreenViewModel :
             return false;
         }
 
-        return StackItems.Count > 0;
+        return FindNextAvailableStackItem([.. StackItems.Reverse()], cursor.StackId) is not null;
     }
 
     [RelayCommand(CanExecute = nameof(CanSelectNextStack))]
     private void SelectNextStack()
     {
-        int index = FindStackItemIndex(cursor.StackId);
-        WorldStackItemViewModel next;
+        WorldStackItemViewModel? next = FindNextAvailableStackItem(StackItems, cursor.StackId);
 
-        if (index >= 0 && index < StackItems.Count - 1)
+        if (next is not null)
         {
-            next = StackItems[index + 1];
+            FocusStack(WorldState.Stacks[next.StackId]);
         }
-        else
-        {
-            next = StackItems[0];
-        }
-
-        FocusStack(WorldState.Stacks[next.StackId]);
     }
 
     private bool CanSelectNextStack()
@@ -621,14 +683,14 @@ internal sealed partial class WorldScreenViewModel :
             return false;
         }
 
-        return StackItems.Count > 0;
+        return FindNextAvailableStackItem(StackItems, cursor.StackId) is not null;
     }
 
-    private int FindStackItemIndex(WorldStackId? stackId)
+    private static int FindStackItemIndex(IReadOnlyList<WorldStackItemViewModel> items, WorldStackId? stackId)
     {
-        for (int index = 0; index < StackItems.Count; index++)
+        for (int index = 0; index < items.Count; index++)
         {
-            if (StackItems[index].StackId == stackId)
+            if (items[index].StackId == stackId)
             {
                 return index;
             }
@@ -674,7 +736,7 @@ internal sealed partial class WorldScreenViewModel :
         UpdateStackActions();
         UpdateEndTurnHighlighted();
 
-        WorldStackItemViewModel? nextStack = FindNextUnfinishedStackItem(stack.Id);
+        WorldStackItemViewModel? nextStack = FindNextAvailableStackItem(StackItems, stack.Id);
 
         if (nextStack is not null)
         {
@@ -698,13 +760,37 @@ internal sealed partial class WorldScreenViewModel :
         return stack is not null && stack.MovementPoints > 0 && !IsFinished(stack);
     }
 
-    private WorldStackItemViewModel? FindNextUnfinishedStackItem(WorldStackId stackId)
+    [RelayCommand(CanExecute = nameof(CanContinuePath))]
+    private void ContinuePath()
     {
-        int index = FindStackItemIndex(stackId);
+        WorldStack? stack = ResolveSelectedStack();
+        WorldPathSelection? path = cursor.Path;
 
-        for (int offset = 1; offset <= StackItems.Count; offset++)
+        if (stack is not null && path is not null)
         {
-            WorldStackItemViewModel item = StackItems[(index + offset).Mod(StackItems.Count)];
+            MoveSelectedStackAsync(stack, path).FileAndForget();
+        }
+    }
+
+    private bool CanContinuePath()
+    {
+        if (IsBusy)
+        {
+            return false;
+        }
+
+        WorldStack? stack = ResolveSelectedStack();
+
+        return stack is not null && stack.MovementPoints > 0 && cursor.Path is not null;
+    }
+
+    private static WorldStackItemViewModel? FindNextAvailableStackItem(IReadOnlyList<WorldStackItemViewModel> items, WorldStackId? stackId)
+    {
+        int index = FindStackItemIndex(items, stackId);
+
+        for (int offset = 1; offset <= items.Count; offset++)
+        {
+            WorldStackItemViewModel item = items[(index + offset).Mod(items.Count)];
 
             if (item is { MovementPoints: > 0, IsFinished: false })
             {
@@ -790,7 +876,7 @@ internal sealed partial class WorldScreenViewModel :
         UpdateReachable();
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(HasSelectedAction))]
     private void CancelSelectedAction()
     {
         if (cursor.Action is not null)
@@ -878,10 +964,12 @@ internal sealed partial class WorldScreenViewModel :
         if (cursor != newCursor)
         {
             bool selectionChanged = newCursor.StackId != cursor.StackId;
+            bool pathChanged = newCursor.Path != cursor.Path;
 
             cursor = newCursor;
             ActionPromptText = newCursor.Action?.SelectionText;
             ActionPromptCost = newCursor.Action?.SelectionCost;
+            HasSelectedAction = newCursor.Action is not null;
             RefreshRenderRequest();
             UpdateCursorType();
 
@@ -890,6 +978,10 @@ internal sealed partial class WorldScreenViewModel :
                 NotifySelectionCommandsChanged();
                 UpdateStackActions();
             }
+            else if (pathChanged)
+            {
+                ContinuePathCommand.NotifyCanExecuteChanged();
+            }
         }
     }
 
@@ -897,6 +989,7 @@ internal sealed partial class WorldScreenViewModel :
     {
         SetCursor(cursor.SelectStack(stackId));
         UpdateReachable();
+        UpdateSelectedPath();
     }
 
     private void PlayStackResponseSound(WorldStack stack)
@@ -905,6 +998,20 @@ internal sealed partial class WorldScreenViewModel :
         int variant = random.Next(AssetSoundKey.StackUnitResponse.VariantCount);
 
         Game.PlaySound(new AssetSoundKey.StackUnitResponse(leader.DefinitionId, variant));
+    }
+
+    private void SetSelectedPath(WorldStack stack, WorldPathSelection? path)
+    {
+        if (path is not null)
+        {
+            stackDestinations = stackDestinations.SetItem(stack.Id, path.Destination);
+        }
+        else
+        {
+            stackDestinations = stackDestinations.Remove(stack.Id);
+        }
+
+        SetCursor(cursor with { Path = path });
     }
 
     private void FocusCamera(WorldPosition position, TimeSpan duration)
@@ -1073,7 +1180,11 @@ internal sealed partial class WorldScreenViewModel :
 
     async Task IWorldPathEncounterVisitor<SelectedMove, Task>.Visit(WorldPathEncounter.Site encounter, SelectedMove move)
     {
-        if (await MoveStackAsync(move.Stack.Id, move.Selection.Destination))
+        if (move.Stack.Position == move.Selection.Destination)
+        {
+            EnqueueEntry(new Entry.SiteEnter(WorldState, move.Stack.Id, encounter.SiteId));
+        }
+        else if (await MoveStackAsync(move.Stack.Id, move.Selection.Destination))
         {
             EnqueueEntry(new Entry.SiteEnter(WorldState, move.Stack.Id, encounter.SiteId));
         }
@@ -1281,20 +1392,7 @@ internal sealed partial class WorldScreenViewModel :
     {
         SetCursor(cursor.SelectStack(action.StackId));
         UpdateReachable();
-    }
-
-    private void OnActionStackExhaust(WorldEventAction.StackExhaust action)
-    {
-        if (cursor.StackId == action.StackId)
-        {
-            WorldStackItemViewModel? nextStack = FindNextUnfinishedStackItem(action.StackId);
-
-            if (nextStack is not null)
-            {
-                ClearSelectedAction();
-                FocusStack(WorldState.Stacks[nextStack.StackId]);
-            }
-        }
+        UpdateSelectedPath();
     }
 
     private void ShowGameEndedScreen()
@@ -1337,6 +1435,7 @@ internal sealed partial class WorldScreenViewModel :
     private void NotifySelectionCommandsChanged()
     {
         InspectStackCommand.NotifyCanExecuteChanged();
+        ContinuePathCommand.NotifyCanExecuteChanged();
         FinishStackCommand.NotifyCanExecuteChanged();
         OpenStackCommand.NotifyCanExecuteChanged();
     }
@@ -1348,12 +1447,16 @@ internal sealed partial class WorldScreenViewModel :
         ProcessEventQueue();
     }
 
+    [MemberNotNull(nameof(playerInfo))]
     private void UpdateWorld()
     {
+        playerInfo = ResolvePlayerInfo();
+
         UpdateSelection();
         UpdateReachable();
-        UpdatePositionInfo();
+        UpdateSelectedPath();
         UpdateStatus();
+        UpdatePositionInfo();
         UpdateObjective();
         UpdateObjectiveProgress();
         UpdateCursorType();
@@ -1399,10 +1502,10 @@ internal sealed partial class WorldScreenViewModel :
 
     private void UpdateEndTurnHighlighted()
     {
-        IsEndTurnHighlighted = Snapshot.IsViewPlayerTurn && eventQueue.IsIdle && !HasUnfinishedStack();
+        IsEndTurnHighlighted = Snapshot.IsViewPlayerTurn && eventQueue.IsIdle && !HasAvailableStack();
     }
 
-    private bool HasUnfinishedStack()
+    private bool HasAvailableStack()
     {
         foreach (WorldStack stack in WorldState.Stacks.Values)
         {
@@ -1542,11 +1645,34 @@ internal sealed partial class WorldScreenViewModel :
         }
         else if (cursor.Action is not null)
         {
-            CursorType = cursor.Action.Accept(cursorTypeVisitor, cursor.HoverTile.Value);
+            CursorType = ResolveActionCursor(cursor.Action, cursor.HoverTile.Value);
         }
         else
         {
             CursorType = ResolveHoverCursor(cursor.HoverTile.Value);
+        }
+    }
+
+    private AssetAnimationKey.CursorType ResolveActionCursor(WorldCursorAction action, WorldPosition position)
+    {
+        (AssetAnimationKey.CursorType valid, AssetAnimationKey.CursorType invalid) = action switch
+        {
+            WorldCursorAction.CastSpell => (AssetAnimationKey.CursorType.CastSpell, AssetAnimationKey.CursorType.CastSpellInvalid),
+            WorldCursorAction.UseItem => (AssetAnimationKey.CursorType.UseScroll, AssetAnimationKey.CursorType.UseScrollInvalid),
+            WorldCursorAction.DropItem => (AssetAnimationKey.CursorType.DropBag, AssetAnimationKey.CursorType.Default),
+            WorldCursorAction.CreateRod => (AssetAnimationKey.CursorType.CreateRod, AssetAnimationKey.CursorType.CreateRodInvalid),
+            WorldCursorAction.DestroyRod => (AssetAnimationKey.CursorType.DestroyRod, AssetAnimationKey.CursorType.Default)
+        };
+
+        WorldCommandResult commandResult = GameModel.World.DryRunCommand(action.CreateCommand(position));
+
+        if (commandResult.Error is null)
+        {
+            return valid;
+        }
+        else
+        {
+            return invalid;
         }
     }
 
@@ -1571,16 +1697,14 @@ internal sealed partial class WorldScreenViewModel :
             {
                 return AssetAnimationKey.CursorType.ViewCity;
             }
+            else if (site is not null)
+            {
+                return AssetAnimationKey.CursorType.Visit;
+            }
             else
             {
                 return AssetAnimationKey.CursorType.Default;
             }
-        }
-        else if (selectedStack is not null &&
-                 !cursor.ReachablePositions.Contains(position) &&
-                 (fortification is null || fortification.Owner != ViewPlayerId))
-        {
-            return AssetAnimationKey.CursorType.Default;
         }
         else if (fortification is not null)
         {
@@ -1588,13 +1712,13 @@ internal sealed partial class WorldScreenViewModel :
             {
                 if (selectedStack is not null)
                 {
-                    if (IsThief(selectedStack))
-                    {
-                        return AssetAnimationKey.CursorType.Negotiate;
-                    }
-                    else if (fortification is WorldRuin { LooterId: not null })
+                    if (fortification is WorldRuin { LooterId: not null })
                     {
                         return AssetAnimationKey.CursorType.Move;
+                    }
+                    else if (IsThief(selectedStack))
+                    {
+                        return AssetAnimationKey.CursorType.Negotiate;
                     }
                     else
                     {
@@ -1659,20 +1783,6 @@ internal sealed partial class WorldScreenViewModel :
         }
     }
 
-    private WorldPosition? ResolveHoverTarget(WorldPosition tile)
-    {
-        WorldPosition position = ResolveClickTarget(tile);
-
-        if (ResolveFortificationBodyAt(position) is null)
-        {
-            return position;
-        }
-        else
-        {
-            return null;
-        }
-    }
-
     private WorldPosition ResolvePointerTile(WorldPosition tile, WorldPosition? objectPosition)
     {
         if (cursor.Action is null && objectPosition is not null)
@@ -1712,7 +1822,20 @@ internal sealed partial class WorldScreenViewModel :
 
     private void UpdateStatus()
     {
-        Status = WorldStatusViewModel.Create(WorldState, ViewPlayerId, Status);
+        Status = WorldStatusViewModel.Create(WorldState, ViewPlayerId, playerInfo, Status);
+    }
+
+    private WorldGetPlayerInfoCommand.Result ResolvePlayerInfo()
+    {
+        ICommandResult<WorldCommandError, WorldEvent, WorldGetPlayerInfoCommand.Result> result =
+            GameModel.World.DryRunCommand(new WorldGetPlayerInfoCommand(ViewPlayerId));
+
+        if (result.Failed)
+        {
+            throw new InvalidOperationException("Player info is not available.");
+        }
+
+        return result.Data;
     }
 
     private void UpdateObjective()
@@ -1756,6 +1879,14 @@ internal sealed partial class WorldScreenViewModel :
     {
         cursor = cursor.ReconcileWith(WorldState);
 
+        foreach (WorldStackId stackId in stackDestinations.Keys)
+        {
+            if (!WorldState.Stacks.ContainsKey(stackId))
+            {
+                stackDestinations = stackDestinations.Remove(stackId);
+            }
+        }
+
         WorldStack? selected = ResolveSelectedStack();
 
         if (selected is not null && selected.OwnerId != ViewPlayerId)
@@ -1782,9 +1913,29 @@ internal sealed partial class WorldScreenViewModel :
             }
         }
 
-        WorldCursor updated = cursor with { ReachablePositions = reachable, HoverPath = null };
+        SetCursor(cursor with { ReachablePositions = reachable });
+    }
 
-        SetCursor(updated with { HoverPath = ResolveHoverPath(updated, updated.HoverTarget) });
+    private void UpdateSelectedPath()
+    {
+        WorldStack? selected = ResolveSelectedStack();
+
+        if (selected is null)
+        {
+            return;
+        }
+
+        if (stackDestinations.TryGetValue(selected.Id, out WorldPosition destination))
+        {
+            if (selected.Position != destination)
+            {
+                SetCursor(cursor with { Path = BuildPathSelection(selected, destination) });
+            }
+            else
+            {
+                SetSelectedPath(selected, null);
+            }
+        }
     }
 
     private static MusicQueue BuildWorldMusicQueue(IRandomProvider random)
@@ -1860,7 +2011,8 @@ internal sealed partial class WorldScreenViewModel :
             ViewPlayerId,
             cursor,
             FogEnabled,
-            eventActionPlayer.ActiveAnimation));
+            eventActionPlayer.ActiveAnimation,
+            eventQueue.PlayingEntry is not null));
     }
 
     private void SetRenderRequest(WorldRenderRequest request)
