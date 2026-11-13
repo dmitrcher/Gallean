@@ -200,13 +200,7 @@ internal sealed partial class WorldVisual
             return;
         }
 
-        // Without hover, the first tap on a destination shows the path and a second tap on it moves there.
-        if (clickCount == 1 && ViewModel.TryPreviewMove(tile, hitPosition))
-        {
-            redrawRequested = true;
-            return;
-        }
-
+        // The first tap on a destination shows the path and a second tap on it moves there, as with the mouse.
         ViewModel.HandleMapClickAsync(tile, hitPosition, clickCount).FileAndForget();
     }
 
