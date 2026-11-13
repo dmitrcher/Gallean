@@ -3,7 +3,7 @@ using Gallean.Engine;
 
 namespace Gallean.Client;
 
-internal abstract partial record WorldEventAction
+internal closed partial record WorldEventAction
 {
     public sealed record ThiefActionTheirResult(
         ImmutableArray<AssetSoundKey> Sounds,
@@ -12,11 +12,5 @@ internal abstract partial record WorldEventAction
         string ActionName,
         WorldUnitGroup Target,
         bool IsSuccess,
-        string TheirLordName) : Screen(Sounds, FocusPosition)
-    {
-        public override TResult Accept<TResult>(IWorldEventScreenVisitor<TResult> visitor)
-        {
-            return visitor.Visit(this);
-        }
-    }
+        string TheirLordName) : Screen(Sounds, FocusPosition);
 }

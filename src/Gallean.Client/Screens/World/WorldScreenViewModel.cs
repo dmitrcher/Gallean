@@ -24,7 +24,6 @@ internal sealed partial class WorldScreenViewModel :
     private static readonly TimeSpan StackIdleInterval = TimeSpan.FromMinutes(2);
     private static readonly TimeSpan StackStepThreshold = TimeSpan.FromMilliseconds(100);
 
-    private readonly CursorTypeVisitor cursorTypeVisitor;
     private readonly EventActionPlayer eventActionPlayer;
     private readonly WorldEventQueue eventQueue;
     private readonly WorldFinishedStacks finishedStacks;
@@ -39,13 +38,13 @@ internal sealed partial class WorldScreenViewModel :
     private TimeSpan stackIdleRemaining;
     private WorldRenderRequest? renderRequest;
     private ActiveMove? activeMove;
+    private WorldGetPlayerInfoCommand.Result playerInfo;
 
     public WorldScreenViewModel(GameModel gameModel, GameViewModel gameViewModel, IRandomProvider random)
         : base(gameModel, gameViewModel)
     {
         this.random = random;
 
-        cursorTypeVisitor = new CursorTypeVisitor(gameModel);
         eventActionPlayer = new EventActionPlayer(this);
 
         eventQueue = new WorldEventQueue(gameModel.Scenario, gameModel.World.Events);
@@ -580,9 +579,30 @@ internal sealed partial class WorldScreenViewModel :
             ViewPlayerId,
             position,
             visibility,
+            GetResourceNodeInfo(position, plan),
             GameModel.Definitions,
             GameModel.Texts,
             GameModel.Stats);
+    }
+
+    private WorldGetResourceNodeInfoCommand.Result? GetResourceNodeInfo(WorldPosition position, WorldPlan plan)
+    {
+        if (plan.GetResourceNodeAt(position) is null)
+        {
+            return null;
+        }
+
+        ICommandResult<WorldCommandError, WorldEvent, WorldGetResourceNodeInfoCommand.Result> result =
+            GameModel.World.DryRunCommand(new WorldGetResourceNodeInfoCommand(ViewPlayerId, position));
+
+        if (result.Failed)
+        {
+            return null;
+        }
+        else
+        {
+            return result.Data;
+        }
     }
 
     public void UpdateHover(WorldPosition hoverTile, WorldPosition? objectPosition)
@@ -1427,13 +1447,16 @@ internal sealed partial class WorldScreenViewModel :
         ProcessEventQueue();
     }
 
+    [MemberNotNull(nameof(playerInfo))]
     private void UpdateWorld()
     {
+        playerInfo = ResolvePlayerInfo();
+
         UpdateSelection();
         UpdateReachable();
         UpdateSelectedPath();
-        UpdatePositionInfo();
         UpdateStatus();
+        UpdatePositionInfo();
         UpdateObjective();
         UpdateObjectiveProgress();
         UpdateCursorType();
@@ -1622,11 +1645,34 @@ internal sealed partial class WorldScreenViewModel :
         }
         else if (cursor.Action is not null)
         {
-            CursorType = cursor.Action.Accept(cursorTypeVisitor, cursor.HoverTile.Value);
+            CursorType = ResolveActionCursor(cursor.Action, cursor.HoverTile.Value);
         }
         else
         {
             CursorType = ResolveHoverCursor(cursor.HoverTile.Value);
+        }
+    }
+
+    private AssetAnimationKey.CursorType ResolveActionCursor(WorldCursorAction action, WorldPosition position)
+    {
+        (AssetAnimationKey.CursorType valid, AssetAnimationKey.CursorType invalid) = action switch
+        {
+            WorldCursorAction.CastSpell => (AssetAnimationKey.CursorType.CastSpell, AssetAnimationKey.CursorType.CastSpellInvalid),
+            WorldCursorAction.UseItem => (AssetAnimationKey.CursorType.UseScroll, AssetAnimationKey.CursorType.UseScrollInvalid),
+            WorldCursorAction.DropItem => (AssetAnimationKey.CursorType.DropBag, AssetAnimationKey.CursorType.Default),
+            WorldCursorAction.CreateRod => (AssetAnimationKey.CursorType.CreateRod, AssetAnimationKey.CursorType.CreateRodInvalid),
+            WorldCursorAction.DestroyRod => (AssetAnimationKey.CursorType.DestroyRod, AssetAnimationKey.CursorType.Default)
+        };
+
+        WorldCommandResult commandResult = GameModel.World.DryRunCommand(action.CreateCommand(position));
+
+        if (commandResult.Error is null)
+        {
+            return valid;
+        }
+        else
+        {
+            return invalid;
         }
     }
 
@@ -1666,13 +1712,13 @@ internal sealed partial class WorldScreenViewModel :
             {
                 if (selectedStack is not null)
                 {
-                    if (IsThief(selectedStack))
-                    {
-                        return AssetAnimationKey.CursorType.Negotiate;
-                    }
-                    else if (fortification is WorldRuin { LooterId: not null })
+                    if (fortification is WorldRuin { LooterId: not null })
                     {
                         return AssetAnimationKey.CursorType.Move;
+                    }
+                    else if (IsThief(selectedStack))
+                    {
+                        return AssetAnimationKey.CursorType.Negotiate;
                     }
                     else
                     {
@@ -1776,7 +1822,20 @@ internal sealed partial class WorldScreenViewModel :
 
     private void UpdateStatus()
     {
-        Status = WorldStatusViewModel.Create(WorldState, ViewPlayerId, Status);
+        Status = WorldStatusViewModel.Create(WorldState, ViewPlayerId, playerInfo, Status);
+    }
+
+    private WorldGetPlayerInfoCommand.Result ResolvePlayerInfo()
+    {
+        ICommandResult<WorldCommandError, WorldEvent, WorldGetPlayerInfoCommand.Result> result =
+            GameModel.World.DryRunCommand(new WorldGetPlayerInfoCommand(ViewPlayerId));
+
+        if (result.Failed)
+        {
+            throw new InvalidOperationException("Player info is not available.");
+        }
+
+        return result.Data;
     }
 
     private void UpdateObjective()
@@ -1952,7 +2011,8 @@ internal sealed partial class WorldScreenViewModel :
             ViewPlayerId,
             cursor,
             FogEnabled,
-            eventActionPlayer.ActiveAnimation));
+            eventActionPlayer.ActiveAnimation,
+            eventQueue.PlayingEntry is not null));
     }
 
     private void SetRenderRequest(WorldRenderRequest request)

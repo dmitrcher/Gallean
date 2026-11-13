@@ -1,6 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Gallean.Common;
 using Gallean.Engine;
 
 namespace Gallean.Client;
@@ -30,7 +29,7 @@ internal abstract partial class StackTabViewModel
         DropZones = [SpellDropZone, GroundDropZone, DismissDropZone];
     }
 
-    protected ManagementScreenViewModel Screen { get; }
+    public ManagementScreenViewModel Screen { get; }
 
     public override string TabHeader => Tr("Party");
 
@@ -141,10 +140,10 @@ internal abstract partial class StackTabViewModel
 
     private async Task<bool> TryEquipItemAsync(WorldStackId stackId, WorldItemId itemId, LeaderEquipmentSlot slot)
     {
-        WorldEquipItemCommand equipItemCommand = new(stackId, itemId, slot);
-        ICommandResult<WorldCommandError, WorldEvent, Empty> equipResult = GameModel.World.DryRunCommand(equipItemCommand);
+        WorldEquipItemCommand command = new(stackId, itemId, slot);
+        WorldCommandResult commandResult = GameModel.World.DryRunCommand(command);
 
-        if (equipResult.Error is WorldCommandError.EquipmentSlotOccupied)
+        if (commandResult.Error is WorldCommandError.EquipmentSlotOccupied)
         {
             if (!await TryDispatchWorldActionAsync(new WorldUnequipItemCommand(stackId, slot)))
             {
@@ -152,7 +151,7 @@ internal abstract partial class StackTabViewModel
             }
         }
 
-        return await TryDispatchWorldActionAsync(equipItemCommand);
+        return await TryDispatchWorldActionAsync(command);
     }
 
     private void DropOnGround(WorldStack stack, WorldItem item)

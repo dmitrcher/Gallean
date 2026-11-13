@@ -2,9 +2,9 @@ using System.Collections.Immutable;
 
 namespace Gallean.Client;
 
-internal abstract partial record WorldEventAction
+internal closed partial record WorldEventAction
 {
-    public abstract record Screen(
+    public closed record Screen(
         ImmutableArray<AssetSoundKey> Sounds,
         WorldPosition? FocusPosition) : Blocking(Sounds, FocusPosition)
     {
@@ -12,7 +12,5 @@ internal abstract partial record WorldEventAction
         {
             return visitor.Visit(this);
         }
-
-        public abstract TResult Accept<TResult>(IWorldEventScreenVisitor<TResult> visitor);
     }
 }

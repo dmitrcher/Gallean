@@ -1,5 +1,4 @@
 using Gallean.Common;
-using Gallean.Configuration;
 using Gallean.Engine;
 using Gallean.Entities;
 using Gallean.Entities.GameData;
@@ -50,6 +49,7 @@ internal sealed class GameLoader(IRandomProvider random)
                     scenario.CityCount,
                     GetOptionalText(texts, scenario.InfoTexts.Creator),
                     campaign.IsSkirmish,
+                    campaign.CanImportLeader,
                     scenario.PlayableRaces));
             }
 

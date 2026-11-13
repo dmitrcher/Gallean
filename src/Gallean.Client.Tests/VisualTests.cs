@@ -2275,7 +2275,7 @@ public sealed class VisualTests
     }
 
     [AvaloniaTest]
-    public async Task WorldStackBarCrowdedTest()
+    public async Task WorldStackBarMultipleTest()
     {
         using Sandbox sb = Sandbox.Create();
 
@@ -2309,7 +2309,7 @@ public sealed class VisualTests
 
         Button card = window.GetVisualDescendants().OfType<Button>().First(button => button.Classes.Contains("selected"));
         Panel item = Assert.IsOfType<Panel>(card.Parent);
-        Button done = item.GetVisualDescendants().OfType<Button>().Where(button => button.Classes.Contains("card")).Skip(1).First();
+        Button done = item.GetVisualDescendants().OfType<Button>().First(button => button.Name == "FinishButton");
         window.MouseMove(Assert.NotNull(done.TranslatePoint(new Point(19, 19), window)));
 
         Panel doneSlot = Assert.IsOfType<Panel>(done.Parent);
@@ -4281,6 +4281,7 @@ public sealed class VisualTests
         UnitDefinition leaderDefinition = scenarioModel.Definitions.GetUnit(humans.Leaders[0]);
         ItemDefinition healingPotion = scenarioModel.Definitions.GetItem(new ItemDefinitionId("G000IG0001"));
         ItemDefinition manaPotion = scenarioModel.Definitions.GetItem(new ItemDefinitionId("G000IG0002"));
+        UnitModifierDefinition manaPotionBoost = scenarioModel.Definitions.GetUnitModifier(new UnitModifierDefinitionId("g000um2002"));
 
         WorldMap map = TestHelpers.SimpleMap(8, 8);
 
@@ -4328,6 +4329,7 @@ public sealed class VisualTests
             .WithDefinition(leaderDefinition)
             .WithDefinition(healingPotion)
             .WithDefinition(manaPotion)
+            .WithDefinition(manaPotionBoost)
             .WithStack(stack)
             .WithSite(site)
             .WithSubrace(TestHelpers.NeutralSubrace)
@@ -5730,6 +5732,48 @@ public sealed class VisualTests
         builder.Add(MakeBattleUnit(3, defenders.Leaders[0], BattleSide.Defender, gameModel));
         builder.Add(MakeBattleUnit(4, defenders.Units[0], BattleSide.Defender, gameModel));
         builder.Add(MakeBattleUnit(5, defenders.Units[1], BattleSide.Defender, gameModel));
+
+        EngineContext engine = new(new RandomProvider(0), gameModel.Definitions, gameModel.Stats, GameScenarioProvider.Empty, new GlobalVariables());
+
+        await gameModel.RunAsync(() =>
+        {
+            gameModel.Session.StartBattle(new BattleSession(
+                engine,
+                builder.Build(BattleModifiers.None, TestHelpers.SimpleBattleInfo()),
+                NullBattleUnitUpgradeResolver.Instance,
+                _ => { },
+                isAttackerAi: false,
+                isDefenderAi: false,
+                canAutoResolve: true,
+                new WorldPosition(0, 0)));
+        });
+        BattleModel battle = Assert.NotNull(gameModel.ActiveBattle);
+
+        (GameViewModel gameViewModel, GameView window) = Initialize(sb, BaseWidth, BaseHeight);
+
+        gameViewModel.ShowScreen(new BattleScreenViewModel(gameModel, battle, gameViewModel, assets, NullAssetPreloader.Instance, new RandomProvider(0)));
+
+        await WaitForBattleAsync(window);
+
+        await CaptureAsync(window);
+    }
+
+    [AvaloniaTest]
+    public async Task BattleReachAllTest()
+    {
+        using Sandbox sb = Sandbox.Create();
+
+        GameModel gameModel = LoadScenario(null);
+        WorldRaceDefinition attackers = gameModel.Definitions.GetRace(WorldRace.Human);
+        WorldRaceDefinition defenders = gameModel.Definitions.GetRace(WorldRace.Human);
+
+        BattleStateBuilder builder = new(gameModel.Definitions);
+
+        builder.Add(MakeBattleUnit(0, attackers.Leaders[2], BattleSide.Attacker, gameModel));
+
+        builder.Add(MakeBattleUnit(1, defenders.Units[3], BattleSide.Defender, gameModel), GridPosition.FrontBottom);
+        builder.Add(MakeBattleUnit(2, defenders.Units[3], BattleSide.Defender, gameModel), GridPosition.FrontTop);
+        builder.Add(MakeBattleUnit(3, defenders.Units[3], BattleSide.Defender, gameModel), GridPosition.BackCenter);
 
         EngineContext engine = new(new RandomProvider(0), gameModel.Definitions, gameModel.Stats, GameScenarioProvider.Empty, new GlobalVariables());
 
@@ -7168,9 +7212,19 @@ public sealed class VisualTests
         (GameViewModel gameViewModel, GameView window) = Initialize(sb, BaseWidth, BaseHeight);
 
         gameViewModel.ShowScreen(new MainMenuScreenViewModel(gameViewModel, saves: []));
+        ClientVersion clientVersion = new("0.13.0", "2d40300");
+        using UpdateClient updateClient = new(clientVersion, sb.GetPath("downloads"), NullLog.Instance);
+
         gameViewModel.OpenScreen(new UpdatePromptViewModel(
-            new UpdateInfo(new ClientVersion("0.14.0", null), new Uri("https://github.com/GalleanDev/Gallean/releases/tag/v0.14.0")),
-            new ClientVersion("0.13.0", "2d40300")));
+            new UpdateInfo(
+                new ClientVersion("0.14.0", null),
+                new Uri("https://github.com/GalleanDev/Gallean/releases/tag/v0.14.0"),
+                new Uri("https://gallean.org/go/4/0.14.0/linux-x64")),
+            clientVersion,
+            updateClient,
+            new UpdateInstaller(sb.RootPath),
+            () => { },
+            NullLog.Instance));
 
         await CaptureAsync(window);
     }

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -8,7 +9,7 @@ using Gallean.Configuration;
 
 namespace Gallean.Client;
 
-internal sealed class App(ILog log) : Application
+internal sealed class App(ILog log, GCMemoryInfo memoryInfo) : Application
 {
     private CleanupList cleanupList = new();
     private GameViewModel? currentGame;
@@ -65,17 +66,30 @@ internal sealed class App(ILog log) : Application
         textCatalog.MakeCurrent();
 
         Task prepareTask = ClientPlatform.PrepareAsync is { } prepareAsync ? Task.Run(prepareAsync) : Task.CompletedTask;
+        string? processPath = Environment.ProcessPath;
         ClientVersion clientVersion = ClientVersion.Get();
-        UpdateClient updateClient = cleanupList.Add(new UpdateClient(clientVersion, log));
-        Task<UpdateInfo?> latestUpdateTask = ClientPlatform.ChecksForUpdates ? Task.Run(updateClient.TryGetLatestAsync) : Task.FromResult<UpdateInfo?>(null);
+        UpdateClient updateClient = cleanupList.Add(new UpdateClient(clientVersion, AppDirectories.Downloads, log));
+        Task<UpdateInfo?> updateGetLatestTask = ClientPlatform.ChecksForUpdates ? Task.Run(updateClient.TryGetLatestAsync) : Task.FromResult<UpdateInfo?>(null);
+        UpdateInstaller updateInstaller = new(AppContext.BaseDirectory);
+        Task updateCleanupTask = ClientPlatform.ChecksForUpdates ? Task.Run(updateInstaller.Cleanup) : Task.CompletedTask;
 
         Task<AudioOutput> audioOutputTask = Task.Run(() => AudioOutput.CreateAsync(log));
-        Task<AssetProvider> assetProviderTask = Task.Run(AssetProvider.LoadDefault);
+        GameSettingsSource gameSettingsSource = new(gameSettings);
+        Task<AssetProvider> assetProviderTask = Task.Run(() => AssetProvider.LoadDefault(gameSettingsSource, memoryInfo));
         AudioOutput audioOutput = cleanupList.Add(await audioOutputTask);
         AssetProvider assetProvider = cleanupList.Add(await assetProviderTask);
 
         CheckAssetPack(assetProvider);
         await prepareTask;
+
+        try
+        {
+            await updateCleanupTask;
+        }
+        catch (Exception ex)
+        {
+            log.Error("Failed to clean up updates.", ex);
+        }
 
         FreeThreadedRandomProvider random = new();
         GameLoader gameLoader = new(random);
@@ -92,7 +106,7 @@ internal sealed class App(ILog log) : Application
             gameSaveStore,
             leaderStore,
             gameSettingsStore,
-            gameSettings,
+            gameSettingsSource,
             clientVersion,
             log,
             random,
@@ -106,13 +120,19 @@ internal sealed class App(ILog log) : Application
         currentGame = gameViewModel;
         await gameViewModel.ShowMainMenuCommand.ExecuteAsync(null);
 
-        UpdateInfo? latestUpdate = await latestUpdateTask;
+        UpdateInfo? latestUpdate = await updateGetLatestTask;
 
         if (latestUpdate is not null && latestUpdate.Version > clientVersion)
         {
             if (gameViewModel.TopScreen is MainMenuScreenViewModel)
             {
-                gameViewModel.OpenScreen(new UpdatePromptViewModel(latestUpdate, clientVersion));
+                gameViewModel.OpenScreen(new UpdatePromptViewModel(
+                    latestUpdate,
+                    clientVersion,
+                    updateClient,
+                    updateInstaller,
+                    () => RestartProcess(host, processPath),
+                    log));
             }
         }
     }
@@ -122,6 +142,17 @@ internal sealed class App(ILog log) : Application
         cleanupList = new CleanupList();
         currentGameException = null;
         TryStartGameAsync(host).FileAndForget();
+    }
+
+    private static void RestartProcess(IGameHost host, string? processPath)
+    {
+        if (processPath is not null)
+        {
+            string[] args = host.Lifetime is IClassicDesktopStyleApplicationLifetime desktop ? desktop.Args ?? [] : [];
+            using Process process = Process.Start(processPath, args);
+        }
+
+        host.Shutdown();
     }
 
     private static void CheckAssetPack(IAssetMetadataProvider assets)

@@ -2,8 +2,11 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
+using Avalonia.Data;
+using Avalonia.Data.Core;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
 
 namespace Gallean.Client;
@@ -13,6 +16,8 @@ namespace Gallean.Client;
 /// </summary>
 internal sealed partial class GameSurface : UserControl
 {
+    private const double SceneHeight = 600.0;
+
     public static readonly StyledProperty<AbstractScreenViewModel?> TopScreenProperty =
         AvaloniaProperty.Register<GameSurface, AbstractScreenViewModel?>(nameof(TopScreen));
 
@@ -24,6 +29,9 @@ internal sealed partial class GameSurface : UserControl
 
     public static readonly StyledProperty<bool> ShowsCursorProperty =
         AvaloniaProperty.Register<GameSurface, bool>(nameof(ShowsCursor), true);
+
+    public static readonly StyledProperty<Language> LanguageProperty =
+        AvaloniaProperty.Register<GameSurface, Language>(nameof(Language));
 
     private Point? touchPressPosition;
     private bool detailsShownByHold;
@@ -56,6 +64,12 @@ internal sealed partial class GameSurface : UserControl
     {
         get => GetValue(MinContentHeightProperty);
         set => SetValue(MinContentHeightProperty, value);
+    }
+
+    public Language Language
+    {
+        get => GetValue(LanguageProperty);
+        set => SetValue(LanguageProperty, value);
     }
 
     /// <summary>
@@ -117,6 +131,100 @@ internal sealed partial class GameSurface : UserControl
         if (e.Property == TopScreenProperty)
         {
             FocusTopScreen();
+        }
+        else if (e.Property == LanguageProperty)
+        {
+            UpdateBindingTargets();
+        }
+        else if (e.Property == AssetScope.AssetsProperty || e.Property == BoundsProperty)
+        {
+            UpdateAssetPixelScale();
+        }
+    }
+
+    /// <summary>
+    /// Limits the decoded asset size by the screen when the surface is the whole app view, as on mobile.
+    /// A desktop window does this itself by the screen it is on.
+    /// </summary>
+    private void UpdateAssetPixelScale()
+    {
+        TopLevel? topLevel = TopLevel.GetTopLevel(this);
+        IAssetProvider? assets = AssetScope.GetOptionalAssets(this);
+
+        if (topLevel is null || topLevel is Window || assets is null)
+        {
+            return;
+        }
+
+        double pixelHeight = topLevel.ClientSize.Height * topLevel.RenderScaling;
+
+        if (pixelHeight > 0)
+        {
+            assets.SetMaxPixelScale((int)Math.Ceiling(pixelHeight / SceneHeight));
+        }
+    }
+
+    private void UpdateBindingTargets()
+    {
+        HashSet<AvaloniaObject> visited = [];
+        Stack<AvaloniaObject> stack = new();
+
+        stack.Push(this);
+
+        while (stack.TryPop(out AvaloniaObject? target))
+        {
+            if (visited.Add(target))
+            {
+                Type type = target.GetType();
+
+                UpdateBindingTargets(target, AvaloniaPropertyRegistry.Instance.GetRegistered(type));
+                UpdateBindingTargets(target, AvaloniaPropertyRegistry.Instance.GetRegisteredAttached(type));
+                UpdateBindingTargets(target, AvaloniaPropertyRegistry.Instance.GetRegisteredDirect(type));
+
+                if (target is Visual visual)
+                {
+                    foreach (Visual child in visual.GetVisualChildren())
+                    {
+                        stack.Push(child);
+                    }
+                }
+
+                if (target is ILogical logical)
+                {
+                    foreach (ILogical child in logical.LogicalChildren)
+                    {
+                        if (child is AvaloniaObject logicalChild)
+                        {
+                            stack.Push(logicalChild);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private static void UpdateBindingTargets(AvaloniaObject target, IReadOnlyList<AvaloniaProperty> properties)
+    {
+        foreach (AvaloniaProperty property in properties)
+        {
+            BindingExpressionBase? expression = BindingOperations.GetBindingExpressionBase(target, property);
+
+            if (expression is not null)
+            {
+                if (ReadsNamedElement(expression))
+                {
+                    continue;
+                }
+                else
+                {
+                    expression.UpdateTarget();
+                }
+            }
+        }
+
+        static bool ReadsNamedElement(BindingExpressionBase expression)
+        {
+            return expression is UntypedBindingExpressionBase untyped && untyped.Description.Contains('#');
         }
     }
 

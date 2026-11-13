@@ -4,7 +4,7 @@ namespace Gallean.Engine;
 
 internal sealed partial class WorldAiPlanner
 {
-    private abstract record AbstractStackAction(WorldAiContext Context, int Priority)
+    private closed record AbstractStackAction(WorldAiContext Context, int Priority)
         : AbstractAction(Context, Priority), IWorldStackOrderVisitor<AbstractStackAction.ActionContext, WorldAiActionPlan?>
     {
         internal readonly record struct ActionContext(
@@ -20,6 +20,7 @@ internal sealed partial class WorldAiPlanner
             WorldPosition TargetPosition,
             WorldPosition BattlePosition,
             BattleState BattleState,
+            WorldPlayerId? DefenderId,
             WorldAiEstimator.PowerEstimate Power,
             int RequiredPowerPercent);
 
@@ -106,7 +107,7 @@ internal sealed partial class WorldAiPlanner
             WorldAiAttackPowerPercent attackPowerPercent = GetAttackPowerPercent(state.Difficulty, aiContext.Engine.Globals);
             int requiredPowerPercent = IsHumanPlayer(state, battle.DefenderId) ? attackPowerPercent.HumanTarget : attackPowerPercent.OtherTarget;
 
-            return new BattleInfo(target, targetPosition, encounter.Position, battle.State, power, requiredPowerPercent);
+            return new BattleInfo(target, targetPosition, encounter.Position, battle.State, battle.DefenderId, power, requiredPowerPercent);
         }
 
         private static WorldAiAttackPowerPercent GetAttackPowerPercent(WorldDifficulty difficulty, GlobalVariables globals)

@@ -4,6 +4,7 @@
              x:Class="Gallean.Client.GameSurface"
              x:DataType="local:GameViewModel"
              TopScreen="{Binding TopScreen}"
+             Language="{Binding Language}"
              local:SettingsScope.Settings="{Binding Settings}"
              Focusable="True"
              Background="{StaticResource WindowBackgroundBrush}">

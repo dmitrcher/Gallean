@@ -18,6 +18,7 @@ internal sealed partial class GameViewModel : ObservableObject, IDisposable
     private readonly GameSaveStore gameSaveStore;
     private readonly LeaderStore leaderStore;
     private readonly GameSettingsStore gameSettingsStore;
+    private readonly GameSettingsSource gameSettingsSource;
     private readonly ClientVersion clientVersion;
     private readonly ILog log;
     private readonly IRandomProvider random;
@@ -35,7 +36,7 @@ internal sealed partial class GameViewModel : ObservableObject, IDisposable
         GameSaveStore gameSaveStore,
         LeaderStore leaderStore,
         GameSettingsStore gameSettingsStore,
-        GameSettings settings,
+        GameSettingsSource gameSettingsSource,
         ClientVersion clientVersion,
         ILog log,
         IRandomProvider random,
@@ -53,8 +54,11 @@ internal sealed partial class GameViewModel : ObservableObject, IDisposable
         this.random = random;
         this.scheduler = scheduler;
 
+        this.gameSettingsSource = gameSettingsSource;
+
         AssetPreloader = assetPreloader;
-        Settings = settings;
+        Settings = gameSettingsSource.Current;
+        Language = Settings.EffectiveLanguage;
 
         screens = new ScreenStack(audioPlayer);
         screens.Changed += OnScreensChanged;
@@ -75,6 +79,9 @@ internal sealed partial class GameViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsWindowed))]
     public partial GameSettings Settings { get; private set; }
+
+    [ObservableProperty]
+    public partial Language Language { get; private set; }
 
     public bool IsWindowed
     {
@@ -271,19 +278,18 @@ internal sealed partial class GameViewModel : ObservableObject, IDisposable
         IsWindowed = !IsWindowed;
     }
 
+    partial void OnSettingsChanged(GameSettings value)
+    {
+        gameSettingsSource.Current = value;
+    }
+
     public void UpdateSettings(GameSettings settings)
     {
         Language language = settings.EffectiveLanguage;
 
         if (language != Settings.EffectiveLanguage)
         {
-            TextCatalog catalog = TextCatalogLoader.Load(language);
-            catalog.MakeCurrent();
-
-            if (activeGame is not null)
-            {
-                _ = ReloadGameTextsAsync(activeGame, language);
-            }
+            _ = SwitchLanguageAsync(language);
         }
 
         Settings = settings;
@@ -875,6 +881,19 @@ internal sealed partial class GameViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(RootScreen));
         OnPropertyChanged(nameof(TopScreen));
         OnPropertyChanged(nameof(PaintsOwnBackground));
+    }
+
+    private async Task SwitchLanguageAsync(Language language)
+    {
+        TextCatalog catalog = TextCatalogLoader.Load(language);
+        catalog.MakeCurrent();
+
+        if (activeGame is not null)
+        {
+            await ReloadGameTextsAsync(activeGame, language);
+        }
+
+        Language = language;
     }
 
     private async Task ReloadGameTextsAsync(GameModel gameModel, Language language)

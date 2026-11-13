@@ -19,13 +19,12 @@ internal sealed class DragDropBehavior(Control view)
 
     private static readonly Size SmallUnitImageSize = new(76, 91);
     private static readonly Size LargeUnitImageSize = new(156, 91);
-    private static readonly Size ItemImageSize = new(76, 76);
+    private static readonly Size ItemImageSize = new(78, 78);
 
     private DragDropViewModel? dragDrop;
     private CursorDragImage? dragImage;
     private TopLevel? dragImageTopLevel;
     private Control? hoverZone;
-    private Visual? pressElement;
     private IDragSource? pressSource;
     private Point pressPosition;
     private double pressScale = 1;
@@ -66,7 +65,7 @@ internal sealed class DragDropBehavior(Control view)
         }
     }
 
-    private static CursorDragImage RenderDragImage(DragPreview preview, Visual source, double scale, double renderScaling)
+    private static CursorDragImage RenderDragImage(DragPreview preview, Visual host, double scale, double renderScaling)
     {
         double pixelScale = scale * renderScaling;
         Size size = GetImageSize(preview.Type);
@@ -81,14 +80,14 @@ internal sealed class DragDropBehavior(Control view)
         };
 
         adorner.Classes.Add(DragImageClass);
-        AdornerLayer.SetAdorner(source, adorner);
+        AdornerLayer.SetAdorner(host, adorner);
         adorner.Measure(size);
         adorner.Arrange(new Rect(size));
 
         using RenderTargetBitmap target = new(pixelSize, dpi);
         target.Render(adorner);
 
-        AdornerLayer.SetAdorner(source, null);
+        AdornerLayer.SetAdorner(host, null);
 
         SKImageInfo info = new(pixelSize.Width, pixelSize.Height, SKColorType.Bgra8888, SKAlphaType.Premul);
 
@@ -149,7 +148,6 @@ internal sealed class DragDropBehavior(Control view)
 
     private void OnDragPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        pressElement = null;
         pressSource = null;
 
         PointerPoint point = e.GetCurrentPoint(view);
@@ -163,7 +161,6 @@ internal sealed class DragDropBehavior(Control view)
             if (source?.DragPreview is not null)
             {
                 pressPointerType = e.Pointer.Type;
-                pressElement = element;
                 pressSource = source;
                 pressPosition = position;
                 pressScale = ScaleAt(position);
@@ -182,15 +179,13 @@ internal sealed class DragDropBehavior(Control view)
             MoveTouchImage(point);
             e.Handled = true;
         }
-        else if (pressElement is not null && pressSource is not null && delta.Length >= DragThreshold)
+        else if (pressSource is not null && delta.Length >= DragThreshold)
         {
-            Visual element = pressElement;
             IDragSource source = pressSource;
 
-            pressElement = null;
             pressSource = null;
 
-            if (TryBeginDrag(element, source, e.KeyModifiers))
+            if (TryBeginDrag(source, e.KeyModifiers))
             {
                 e.Pointer.Capture(view);
                 UpdateHoverZone(point);
@@ -202,7 +197,6 @@ internal sealed class DragDropBehavior(Control view)
 
     private void OnDragPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        pressElement = null;
         pressSource = null;
 
         if (dragDrop is not null)
@@ -254,7 +248,7 @@ internal sealed class DragDropBehavior(Control view)
         }
     }
 
-    private bool TryBeginDrag(Visual element, IDragSource source, KeyModifiers modifiers)
+    private bool TryBeginDrag(IDragSource source, KeyModifiers modifiers)
     {
         DragPreview? preview = source.DragPreview;
         TopLevel? topLevel = TopLevel.GetTopLevel(view);
@@ -272,7 +266,7 @@ internal sealed class DragDropBehavior(Control view)
             }
             else
             {
-                dragImage = RenderDragImage(preview, element, pressScale, renderScaling);
+                dragImage = RenderDragImage(preview, view, pressScale, renderScaling);
                 dragImageTopLevel = topLevel;
                 CursorScope.SetDragImage(topLevel, dragImage);
             }

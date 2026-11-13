@@ -988,10 +988,13 @@ public sealed class WorldScreenViewModelTests
 
         Assert.That(gameViewModel.TopScreen, Is.SameAs(world));
         Assert.That(world.RenderRequest.Animation, Is.EqualTo(new WorldAnimationState.Pause(TimeSpan.FromSeconds(0.25))));
+        Assert.That(world.RenderRequest.IsPlayingEvent, Is.True);
 
         world.CompleteAnimation();
 
         ScenarioEventPopupViewModel popup = Assert.IsOfType<ScenarioEventPopupViewModel>(gameViewModel.TopScreen);
+
+        Assert.That(world.RenderRequest.IsPlayingEvent, Is.True);
 
         Assert.That(
             popup.Messages,
@@ -999,6 +1002,10 @@ public sealed class WorldScreenViewModelTests
             {
                 new(new ScenarioEventPopupMessage([new ScenarioTextSpan("Welcome.", ScenarioTextSpanType.Text)], "name", new AssetSpriteKey.UnitEventPortrait(ScenarioEventPortraitId.Unit(leader.Id)), IsPortraitLeft: false))
             }));
+
+        gameViewModel.CloseScreen(popup);
+
+        Assert.That(world.RenderRequest.IsPlayingEvent, Is.False);
     }
 
     [Test]
@@ -3398,9 +3405,13 @@ public sealed class WorldScreenViewModelTests
 
         WorldStatusViewModel expectedStatus = new(
             human.Id,
-            1,
+            "Turn 1",
             new AssetSpriteKey.LordFace(WorldRace.Undead, 0, IsLarge: false),
-            new ResourceSetViewModel(new WorldResourceSet(350, 26, 2, 3, 4, 5), new WorldResourceSet(250, 1, 2, 3, 4, 5), ResourceSetProjection.All));
+            new ResourceSetViewModel(new WorldResourceSet(350, 26, 2, 3, 4, 5), new WorldResourceSet(250, 1, 2, 3, 4, 5), ResourceSetProjection.All),
+            new WorldIncomeViewModel(new WorldGetPlayerInfoCommand.Result(
+                TotalIncome: new WorldResourceSet(100, 25, 0, 0, 0, 0),
+                CapitalIncome: new WorldResourceSet(100, 25, 0, 0, 0, 0),
+                ResourceNodesIncome: WorldResourceSet.Empty)));
 
         Assert.That(world.Status, Is.EqualTo(expectedStatus));
     }

@@ -7,6 +7,8 @@ namespace Gallean.Client;
 
 internal sealed partial class GameView : Window
 {
+    private const double SceneHeight = 600.0;
+
     public static readonly StyledProperty<bool> IsWindowedProperty =
         AvaloniaProperty.Register<GameView, bool>(nameof(IsWindowed), defaultValue: true, defaultBindingMode: BindingMode.TwoWay);
 
@@ -145,6 +147,20 @@ internal sealed partial class GameView : Window
                     Math.Max(area.X, Math.Min(Position.X, area.Right - pixelSize.Width)),
                     Math.Max(area.Y, Math.Min(Position.Y, area.Bottom - pixelSize.Height)));
             }
+        }
+
+        UpdateAssetPixelScale(screen);
+    }
+
+    private void UpdateAssetPixelScale(Screen screen)
+    {
+        IAssetProvider? assets = AssetScope.GetOptionalAssets(this);
+
+        if (assets is not null)
+        {
+            int maxPixelScale = (int)Math.Ceiling(screen.Bounds.Height / SceneHeight);
+
+            assets.SetMaxPixelScale(maxPixelScale);
         }
     }
 }

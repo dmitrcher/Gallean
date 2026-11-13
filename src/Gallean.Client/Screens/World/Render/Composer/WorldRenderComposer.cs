@@ -79,7 +79,7 @@ internal sealed partial class WorldRenderComposer(
 
         HighlightOverlay highlightOverlay = new(highlights);
 
-        PathOverlay? selectedPathOverlay = BuildSelectedPathOverlay(request);
+        PathOverlay? selectedPathOverlay = BuildSelectedPathOverlay(request, animatedStackId);
         IReadOnlyList<Cursor> cursors = BuildCursors(request, visibility, plan, definitions, selectedPathOverlay);
 
         WorldRenderState world = BuildWorld(
@@ -199,8 +199,7 @@ internal sealed partial class WorldRenderComposer(
                     assets,
                     data.SpellId,
                     data.Position,
-                    data.SummonedStackId),
-                _ => throw new ArgumentOutOfRangeException(nameof(request), request.Animation, null)
+                    data.SummonedStackId)
             };
         }
 
@@ -372,7 +371,9 @@ internal sealed partial class WorldRenderComposer(
         List<Highlight> highlights = [];
         WorldStack? selected = null;
 
-        if (cursor.StackId is not null && cursor.StackId != animatedStackId)
+        if (!request.IsPlayingEvent &&
+            cursor.StackId is not null &&
+            cursor.StackId != animatedStackId)
         {
             selected = request.State.Stacks.GetValueOrDefault(cursor.StackId.Value);
         }
@@ -389,7 +390,12 @@ internal sealed partial class WorldRenderComposer(
             }
         }
 
-        WorldPosition? hostileTarget = cursor.Path?.Encounter?.Accept(HostileEncounterVisitor.Instance, Empty.Value);
+        WorldPosition? hostileTarget = null;
+
+        if (!request.IsPlayingEvent || cursor.StackId == animatedStackId)
+        {
+            hostileTarget = cursor.Path?.Encounter?.Accept(HostileEncounterVisitor.Instance, Empty.Value);
+        }
 
         if (hostileTarget is not null)
         {
@@ -444,7 +450,8 @@ internal sealed partial class WorldRenderComposer(
         {
             return new ReachOverlay(cursor.Action.TargetPositions);
         }
-        else if (cursor.StackId is not null &&
+        else if (!request.IsPlayingEvent &&
+                 cursor.StackId is not null &&
                  cursor.StackId != animatedStackId &&
                  cursor.Action is null &&
                  cursor.ReachablePositions.Count > 0)
@@ -460,7 +467,7 @@ internal sealed partial class WorldRenderComposer(
         return null;
     }
 
-    private static PathOverlay? BuildSelectedPathOverlay(WorldRenderRequest request)
+    private static PathOverlay? BuildSelectedPathOverlay(WorldRenderRequest request, WorldStackId? animatedStackId)
     {
         WorldCursor cursor = request.Cursor;
         WorldPathSelection? selection = cursor.Path;
@@ -468,6 +475,7 @@ internal sealed partial class WorldRenderComposer(
         if (selection is not null &&
             cursor.Action is null &&
             cursor.StackId is not null &&
+            (!request.IsPlayingEvent || cursor.StackId == animatedStackId) &&
             request.State.Stacks.TryGetValue(cursor.StackId.Value, out WorldStack? stack))
         {
             IReadOnlyList<PathStep> steps = BuildPathSteps(selection);

@@ -8,14 +8,11 @@ namespace Gallean.Engine.Contracts;
 [JsonDerivedType(typeof(WorldMercenarySite), "mercenary")]
 [JsonDerivedType(typeof(WorldMerchantSite), "merchant")]
 [JsonDerivedType(typeof(WorldTrainerSite), "trainer")]
-public abstract record WorldSite(
+public closed record WorldSite(
     WorldSiteId Id,
     WorldFootprint Footprint,
     WorldObjectVariant Variant,
     ScenarioTextId TitleTextId,
     ScenarioTextId GreetingTextId,
     ImmutableSortedSet<WorldPlayerId> VisitorIds,
-    int AiPriority)
-{
-    public abstract TResult Accept<TContext, TResult>(IWorldSiteVisitor<TContext, TResult> visitor, TContext context);
-}
+    int AiPriority);

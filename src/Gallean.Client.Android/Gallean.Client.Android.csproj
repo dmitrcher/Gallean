@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0-android</TargetFramework>
+    <TargetFramework>net11.0-android</TargetFramework>
     <SupportedOSPlatformVersion>26</SupportedOSPlatformVersion>
     <OutputType>Exe</OutputType>
     <AssemblyName>Gallean</AssemblyName>
@@ -13,13 +13,7 @@
     <ApplicationDisplayVersion>$(VersionPrefix)</ApplicationDisplayVersion>
     <AndroidPackageFormat>apk</AndroidPackageFormat>
     <RuntimeIdentifiers>android-arm64;android-x64</RuntimeIdentifiers>
-    <!--
-      Mono's own JIT and AOT code generators mishandle the negative Unsafe.Add offsets in the NVorbis MDCT on arm64,
-      which crashes the audio thread. The LLVM backend compiles them correctly, so Release builds AOT everything with LLVM.
-      Debug builds run that code in the interpreter and are not affected.
-    -->
-    <AndroidEnableProfiledAot>false</AndroidEnableProfiledAot>
-    <EnableLLVM Condition="'$(Configuration)' == 'Release'">true</EnableLLVM>
+    <!-- .NET 11 runs Android apps on CoreCLR. -->
     <!-- A standalone APK that can be sideloaded, also in Debug. -->
     <EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
     <!-- The shared client is trimmed and AOT-compiled on desktop too, so Release builds trim it the same way. -->
